@@ -2,57 +2,63 @@
 
 module Syntax where
 
-type Prec   = Int               -- Precedence levels.
-type Name   = String            -- General Names.
-type Prompt = String            -- A command line input.
-type X      = Name              -- Variable Names.
-type C      = Name              -- Constructor Names.
-type D      = Name              -- Datatype Names.
-type Op     = Name              -- Operator Names.
+type Prec = Int -- Precedence levels.
+
+type Name = String -- General Names.
+
+type Prompt = String -- A command line input.
+
+type X = Name -- Variable Names.
+
+type C = Name -- Constructor Names.
+
+type D = Name -- Datatype Names.
+
+type Op = Name -- Operator Names.
 
 data Fixity
-  = InfixR                      -- Right-associative.
-  | InfixL                      -- Left-associative.
-  | Infix                       -- Non-associative.
+  = InfixR -- Right-associative.
+  | InfixL -- Left-associative.
+  | Infix -- Non-associative.
 
 data Definition
   = DataDef D [X] [(C, [Type])] -- A data definition.
-  | VarDef Name Type Term       -- A variable definition.
+  | VarDef Name Type Term -- A variable definition.
 
 data OpTable
-  = OpTable [(Fixity, [Op])]    -- A list of variables, ordered by precedence.
+  = OpTable [(Fixity, [Op])] -- A list of variables, ordered by precedence.
 
 data Type
-  = Prim D [Type]               -- A primitive type.
-  | Type :->: Type              -- The type arrow.
-  | TypeVar X                   -- A type variable.
+  = Prim D [Type] -- A primitive type.
+  | Type :->: Type -- The type arrow.
+  | TypeVar X -- A type variable.
 
 data Pattern
-  = VarPat X                    -- A variable pattern.
-  | ConPat C [Pattern]          -- A construcor pattern.
+  = VarPat X -- A variable pattern.
+  | ConPat C [Pattern] -- A construcor pattern.
 
 data Term
-  = Variable Name               -- A variable.
-  | Construcor C [Term]         -- A constructor.
-  | Application Term Term       -- A term applied to a term.
+  = Variable Name -- A variable.
+  | Construcor C [Term] -- A constructor.
+  | Application Term Term -- A term applied to a term.
   | Case Term [(Pattern, Term)] -- A case-term.
-  | Function Name Term          -- A function term.
+  | Function Name Term -- A function term.
 
 data Value
-  = Value C [Value]             -- An algebraic value.
-  | Lambda Name Term            -- A function value.
+  = Value C [Value] -- An algebraic value.
+  | Lambda Name Term -- A function value.
 
 data Command
-  = Load FilePath               -- Load a program.
-  | Reload                      -- Reload the previous program.
-  | Eval Term                   -- Evaluate this term.
-  | Help                        -- Display a help message.
-  | Quit                        -- Exit the shell.
+  = Load FilePath -- Load a program.
+  | Reload -- Reload the previous program.
+  | Eval Term -- Evaluate this term.
+  | Help -- Display a help message.
+  | Quit -- Exit the shell.
 
 data Program
   = Program
-  { gamma :: X -> Maybe (Type, Term)
-  , delta :: D -> Maybe ([X], [(C, [Type])])
+  { gamma :: X -> Maybe (Type, Term),
+    delta :: D -> Maybe ([X], [(C, [Type])])
   }
 
 -- note that patterns and values are a subset of term, so you can have:
@@ -61,7 +67,7 @@ class IsTerm thing where
   toTerm :: thing -> Term
 
 instance IsTerm Pattern where
-  toTerm (VarPat x   ) = Variable x
+  toTerm (VarPat x) = Variable x
   toTerm (ConPat c ps) = Constructor c (toTerm <$> ps)
 
 instance IsTerm Value where

@@ -5,9 +5,11 @@ module Interpreter where
 
 import Syntax
 
-type    RuntimeError = String
-type    Substitution = Term -> Term
-newtype Runtime a    = Runtime { run :: Program -> Either RuntimeError a }
+type RuntimeError = String
+
+type Substitution = Term -> Term
+
+newtype Runtime a = Runtime {run :: Program -> Either RuntimeError a}
 
 emptyProgram :: Program
 emptyProgram = Program (const Nothing) (const Nothing)
