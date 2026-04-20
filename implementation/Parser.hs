@@ -1,4 +1,3 @@
--- Fill in the `undefined` part, feel free to make other changes.
 -- Justify your changes in the report.
 
 module Parser (parseDefinitions, parseInfixes, parseCommand, parseTerm) where
@@ -37,6 +36,41 @@ parseTerm = undefined
 parseDefinitions :: FilePath -> Either ParseError [Definition]
 parseDefinitions = undefined
 
+definition :: Parser Definition
+definition = dataDef <|> binOpDef <|> varDef
+  where
+    dataDef :: Parser Definition
+    dataDef = do
+        strings "data"
+        dataName <- dataTypeName
+        vars <- many variableName
+        strings "="
+        strings "|"
+        constructors <- many1 (pair <$> constructorName <*> many typeParser)
+        return $ DataDef dataName vars constructors
+    binOpDef :: Parser Definition
+    binOpDef = undefined
+    varDef :: Parser Definition
+    varDef =
+        VarDef
+            <$> ( variableName
+                    *> strings ":"
+                )
+            <*> typeParser
+            <*> (strings "=" >> term)
+    pair a b = (a, b)
+
+typeParser :: Parser Type
+typeParser = chainr1 typeLit typeArrow
+  where
+    typeLit = (Prim <$> dataTypeName <*> many typeVar) <|> typeVar
+    typeVar = TypeVar <$> variableName
+    typeArrow = strings "->" >> return (:->:)
+
+-- Must use buildExpressionParser here
+term :: Parser Term
+term = undefined
+
 strings :: String -> Parser String
 strings s = string s <* spaces
 
@@ -69,17 +103,20 @@ variableName = (:) <$> lower <*> many alphaNum <* spaces >>= check
             parserFail $ '\'' : name ++ "' cannot be used as a variable name"
         | otherwise = return name
 
--- do
---     c <- lower
---     cs <- many alphaNum
---     let name = c : cs
---     if name `elem` reservedNames then undefined else return name
+upperThenAlphaNum :: Parser String
+upperThenAlphaNum = (:) <$> upper <*> many alphaNum <* spaces
 
 constructorName :: Parser C
-constructorName = undefined
+constructorName = upperThenAlphaNum
 
 dataTypeName :: Parser D
-dataTypeName = undefined
+dataTypeName = upperThenAlphaNum
+
+nat :: Parser Int
+nat = zero <|> nonzero
+  where
+    zero = char '0' >> return 0 <* spaces
+    nonzero = read <$> many1 digit <* spaces
 
 -- Under here is the code for the first pass of the parsing, which is extracting
 -- the infix operators.
@@ -120,9 +157,3 @@ parseInfixes s = do
     fixityEx = triple <$> fixity
       where
         triple fst snd trd = (fst, snd, trd)
-
-    nat :: Parser Int
-    nat = zero <|> nonzero
-      where
-        zero = char '0' >> return 0 <* spaces
-        nonzero = read <$> many1 digit <* spaces
