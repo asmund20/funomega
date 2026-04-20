@@ -17,6 +17,8 @@ reservedVariableNames =
     , "infix"
     , "infixl"
     , "infixr"
+    , "data"
+    , "fun"
     ]
 
 reservedOpNames :: [String]
@@ -45,9 +47,8 @@ fixity = string "infix" >> (parseInfix <|> parseInfixL <|> parseInfixR) <* space
     parseInfixL = char 'l' >> space >> return InfixL
     parseInfixR = char 'r' >> space >> return InfixR
 
--- TODO: Make sure that it is not a reserved name (reservedNames).
 binOpName :: Parser Op
-binOpName = many1 (satisfy binOpChar) <* spaces
+binOpName = many1 (satisfy binOpChar) <* spaces >>= check
   where
     binOpChar c =
         (not $ isControl c)
@@ -55,13 +56,17 @@ binOpName = many1 (satisfy binOpChar) <* spaces
             && (not $ isSpace c)
             && (not $ c == '(')
             && (not $ c == ')')
+    check name
+        | name `elem` reservedOpNames =
+            parserFail $ '\'' : name ++ "' cannot be used as an operator name"
+        | otherwise = return name
 
 variableName :: Parser X
-variableName = (:) <$> lower <*> many alphaNum >>= check
+variableName = (:) <$> lower <*> many alphaNum <* spaces >>= check
   where
     check name
         | name `elem` reservedVariableNames =
-            parserFail $ '\'' : name ++ "cannot be used as a variable name"
+            parserFail $ '\'' : name ++ "' cannot be used as a variable name"
         | otherwise = return name
 
 -- do
