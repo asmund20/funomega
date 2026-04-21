@@ -31,18 +31,20 @@ parseCommand :: Prompt -> Either ParseError Command
 parseCommand = parse (command <* eof) "command"
 
 command :: Parser Command
-command = load <|> reload <|> eval <|> help <|> quit
+command =
+    (char ':' >> (load <|> reload <|> help <|> quit))
+        <|> eval
   where
     load :: Parser Command
-    load = strings "load" >> Load <$> many anyChar
+    load = strings "l" >> Load <$> many anyChar
     reload :: Parser Command
-    reload = strings "reload" >> return Reload
+    reload = strings "r" >> return Reload
     eval :: Parser Command
-    eval = strings "eval" >> Eval <$> term
+    eval = Eval <$> term
     help :: Parser Command
-    help = strings "help" >> return Help
+    help = strings "?" >> return Help
     quit :: Parser Command
-    quit = strings "quit" >> return Quit
+    quit = strings "q" >> return Quit
 
 parseTerm :: String -> Either ParseError Term
 parseTerm = parse (term <* eof) "term"
