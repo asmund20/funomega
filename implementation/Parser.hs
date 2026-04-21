@@ -28,10 +28,24 @@ reservedOpNames =
     ]
 
 parseCommand :: Prompt -> Either ParseError Command
-parseCommand = undefined
+parseCommand = parse (command <* eof) "command"
+
+command :: Parser Command
+command = load <|> reload <|> eval <|> help <|> quit
+  where
+    load :: Parser Command
+    load = strings "load" >> Load <$> many anyChar
+    reload :: Parser Command
+    reload = strings "reload" >> return Reload
+    eval :: Parser Command
+    eval = strings "eval" >> Eval <$> term
+    help :: Parser Command
+    help = strings "help" >> return Help
+    quit :: Parser Command
+    quit = strings "quit" >> return Quit
 
 parseTerm :: String -> Either ParseError Term
-parseTerm = undefined
+parseTerm = parse (term <* eof) "term"
 
 parseDefinitions :: FilePath -> Either ParseError [Definition]
 parseDefinitions = undefined
@@ -45,8 +59,8 @@ definition = dataDef <|> binOpDef <|> varDef
         dataName <- dataTypeName
         vars <- many variableName
         strings "="
-        strings "|"
-        constructors <- many1 (pair <$> constructorName <*> many typeParser)
+        constructors <-
+            many1 (strings "|" >> pair <$> constructorName <*> many typeParser)
         return $ DataDef dataName vars constructors
     binOpDef :: Parser Definition
     binOpDef = do
