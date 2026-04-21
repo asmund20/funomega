@@ -49,7 +49,15 @@ definition = dataDef <|> binOpDef <|> varDef
         constructors <- many1 (pair <$> constructorName <*> many typeParser)
         return $ DataDef dataName vars constructors
     binOpDef :: Parser Definition
-    binOpDef = undefined
+    binOpDef = do
+        fixity
+        nat
+        x0 <- variableName
+        op <- binOpName
+        x1 <- variableName
+        strings "="
+        t <- term
+        return $ VarDef op (TypeVar "a" :->: (TypeVar "b" :->: TypeVar "c")) t
     varDef :: Parser Definition
     varDef =
         VarDef
