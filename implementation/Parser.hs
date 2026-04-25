@@ -96,7 +96,7 @@ typeParser = chainr1 typeLit typeArrow
 
 literal :: Parser Term
 literal =
-    functionTerm <|> caseTerm <|> Variable
+    functionTerm <|> caseTerm <|> parenTerm <|> Variable
         <$> variableName <|> Constructor
         <$> constructorName
         <*> many term
@@ -113,6 +113,8 @@ literal =
                 <*> ( strings "of"
                         >> many caseInstance
                     )
+    parenTerm :: Parser Term
+    parenTerm = strings "(" *> term <* strings ")"
     caseInstance = strings ";" >> pair <$> pattern <*> (strings "->" >> term)
     pair l r = (l, r)
     pattern :: Parser Pattern
