@@ -151,14 +151,15 @@ nat = zero <|> nonzero
 parseInfixes :: String -> Either ParseError OpTable
 parseInfixes s = do
     operators <- parse (infixity <* eof) "infixes" s
-    let groups = groupBy grouping operators
-        sortedGroups = map (sortBy sorting) groups
-        withoutPrec = map (map removePrec) sortedGroups
+    let sorted = sortBy sorting operators
+        groups = groupBy grouping sorted
+        withoutPrec = map (map removePrec) groups
         extractedInfixity = map extractInfixity withoutPrec
 
     return $ OpTable $ map extractInfixity withoutPrec
   where
-    grouping (a, _, _) (b, _, _) = a == b
+    grouping :: (Fixity, Prec, Op) -> (Fixity, Prec, Op) -> Bool
+    grouping (f1, p1, _) (f2, p2, _) = f1 == f2 && p1 == p2
     sorting (_, l, _) (_, r, _) = compare l r
     removePrec (f, _, n) = (f, n)
     extractInfixity l@((i, _) : _) = (i, map second l)
