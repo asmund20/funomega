@@ -46,6 +46,7 @@ command =
     quit :: Parser Command
     quit = strings "q" >> return Quit
 
+-- TODO: Probably delete this
 parseTerm :: String -> Either ParseError Term
 parseTerm = parse (term <* eof) "term"
 
@@ -93,9 +94,36 @@ typeParser = chainr1 typeLit typeArrow
     typeVar = TypeVar <$> variableName
     typeArrow = strings "->" >> return (:->:)
 
+literal :: Parser Term
+literal =
+    functionTerm <|> caseTerm <|> Variable
+        <$> variableName <|> Constructor
+        <$> constructorName
+        <*> many term
+  where
+    functionTerm :: Parser Term
+    functionTerm =
+        strings "fun"
+            >> Function <$> variableName <*> (strings "->" >> term)
+    caseTerm :: Parser Term
+    caseTerm =
+        strings "case"
+            >> Case
+                <$> term
+                <*> ( strings "of"
+                        >> many caseInstance
+                    )
+    caseInstance = strings ";" >> pair <$> pattern <*> (strings "->" >> term)
+    pair l r = (l, r)
+    pattern :: Parser Pattern
+    pattern = VarPat <$> variableName <|> ConPat <$> constructorName <*> many pattern
+
 -- Must use buildExpressionParser here
 term :: Parser Term
 term = undefined
+
+value :: Parser Value
+value = undefined
 
 strings :: String -> Parser String
 strings s = string s <* spaces
