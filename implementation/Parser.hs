@@ -74,8 +74,8 @@ definition = dataDef <|> binOpDef <|> varDef
         x1 <- variableName
         strings "="
         t <- term
-        -- TODO: Need to use other names here, preferably ones that are not
-        -- allowed
+        -- TODO: Depending on type inference algorithm, I might need to use
+        -- other names here, preferably ones that are not allowed
         return $ VarDef op (TypeVar "a" :->: (TypeVar "b" :->: TypeVar "c")) t
     varDef :: Parser Definition
     varDef =
