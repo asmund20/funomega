@@ -50,8 +50,10 @@ command =
 parseTerm :: String -> Either ParseError Term
 parseTerm = parse (term <* eof) "term"
 
-parseDefinitions :: FilePath -> Either ParseError [Definition]
-parseDefinitions = undefined
+parseDefinitions :: FilePath -> IO (Either ParseError [Definition])
+parseDefinitions f = parseFromFile (definitions <* eof) f
+  where
+    definitions = sepBy definition (strings ".")
 
 definition :: Parser Definition
 definition = dataDef <|> binOpDef <|> varDef
