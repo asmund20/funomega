@@ -50,6 +50,7 @@ command =
 parseTerm :: String -> Either ParseError Term
 parseTerm = parse (term <* eof) "term"
 
+-- TODO: Might want to do the IO in the driver
 parseDefinitions :: FilePath -> IO (Either ParseError [Definition])
 parseDefinitions f = parseFromFile (definitions <* eof) f
   where
