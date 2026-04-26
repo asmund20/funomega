@@ -3,10 +3,13 @@
 module Parser (parseDefinitions, parseInfixes, parseCommand, parseTerm) where
 
 import Data.Char (isAlphaNum, isControl, isSpace)
+import Data.Functor.Identity
 import Data.List (groupBy, sortBy)
 import Data.Maybe (catMaybes)
 import Syntax
 import Text.Parsec (parserFail)
+import Text.Parsec.Expr
+import Text.Parsec.Token (GenTokenParser (reservedOp))
 import Text.ParserCombinators.Parsec
 
 reservedVariableNames :: [String]
@@ -79,7 +82,11 @@ definition = dataDef <|> binOpDef <|> varDef
         t <- term
         -- TODO: Depending on type inference algorithm, I might need to use
         -- other names here, preferably ones that are not allowed
-        return $ VarDef op (TypeVar "a" :->: (TypeVar "b" :->: TypeVar "c")) t
+        return $
+            VarDef
+                op
+                (TypeVar "a" :->: (TypeVar "b" :->: TypeVar "c"))
+                (Function x0 (Function x1 t))
     varDef :: Parser Definition
     varDef =
         VarDef
@@ -123,6 +130,22 @@ literal =
     pattern :: Parser Pattern
     pattern = VarPat <$> variableName <|> ConPat <$> constructorName <*> many pattern
 
+makeTable :: OpTable -> [Operator String () Identity Term]
+makeTable (OpTable t) = concat $ map mapper t
+  where
+    mapper :: (Fixity, [Op]) -> [Operator String () Identity Term]
+    mapper (_, []) = []
+    mapper (f, (o : os)) = binary o (binOpCall o) (fixityToAssoc f) : mapper (f, os)
+    binary :: String -> (a -> a -> a) -> Assoc -> Operator String () Identity a
+    binary name fun assoc =
+        Text.Parsec.Expr.Infix (strings name >> return fun) assoc
+    binOpCall :: X -> Term -> Term -> Term
+    binOpCall o t1 t2 = Application (Application (Variable o) t1) t2
+    fixityToAssoc :: Fixity -> Assoc
+    fixityToAssoc Syntax.Infix = AssocNone
+    fixityToAssoc InfixL = AssocLeft
+    fixityToAssoc InfixR = AssocRight
+
 -- Must use buildExpressionParser here
 term :: Parser Term
 term = undefined
@@ -141,7 +164,7 @@ strings s = string s <* spaces
 fixity :: Parser Fixity
 fixity = string "infix" >> (parseInfix <|> parseInfixL <|> parseInfixR) <* spaces
   where
-    parseInfix = space >> return Infix
+    parseInfix = space >> return Syntax.Infix
     parseInfixL = char 'l' >> space >> return InfixL
     parseInfixR = char 'r' >> space >> return InfixR
 
