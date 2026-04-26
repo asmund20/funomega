@@ -131,7 +131,9 @@ value :: Parser Value
 value = constructorValue <|> lambdaValue
   where
     constructorValue = Value <$> constructorName <*> many value
-    lambdaValue = Lambda <$> strings "\\" <* variableName <*> (strings "." >> term)
+    lambdaValue =
+        strings "\\"
+            >> Lambda <$> variableName <*> (strings "." >> term)
 
 strings :: String -> Parser String
 strings s = string s <* spaces
