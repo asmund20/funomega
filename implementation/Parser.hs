@@ -144,6 +144,7 @@ makeTermParser table = termParser table table
         o <- choice $ map (try . strings) ops
         return (\t1 t2 -> Application (Application (Variable o) t1) t2)
 
+-- TODO: Treat application as a literal?
 makeLiteralParser :: OpTable -> Parser Term
 makeLiteralParser table =
     (functionTerm table) <|> (caseTerm table) <|> (parenTerm table) <|> Variable
@@ -229,13 +230,16 @@ nat = zero <|> nonzero
 
 -- Below here are are the parsers used only for first pass
 
+-- TODO: Check that there are only operator of the same fixity on the same
+-- precedence level somehow.
+
 -- | Parse the infix operators
 parseInfixes :: String -> Either ParseError OpTable
 parseInfixes s = do
     case parse (infixity <* eof) "infixes" s of
         Left e -> Left e
         Right operators -> do
-            let sorted = sortBy sorting operators
+            let sorted = reverse $ sortBy sorting operators
                 groups = groupBy grouping sorted
                 withoutPrec = map (map removePrec) groups
                 extractedInfixity = map extractInfixity withoutPrec
