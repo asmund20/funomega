@@ -34,8 +34,8 @@ reservedOpNames =
 
 -- Exported parsing functions
 
-parseCommand :: Parser Term -> Prompt -> Either ParseError Command
-parseCommand term = parse (command term <* eof) "command"
+parseCommand :: OpTable -> Prompt -> Either ParseError Command
+parseCommand table = parse (command (makeTermParser table) <* eof) "command"
 
 command :: Parser Term -> Parser Command
 command term =
@@ -55,19 +55,19 @@ command term =
     quit = strings "q" >> return Quit
 
 -- TODO: Probably delete this
-parseTerm :: Parser Term -> String -> Either ParseError Term
-parseTerm term = parse (term <* eof) "term"
+parseTerm :: OpTable -> String -> Either ParseError Term
+parseTerm table = parse (makeTermParser table <* eof) "term"
 
 -- TODO: Might want to do the IO in the driver
 parseDefinitions ::
-    FilePath -> IO (Either ParseError ([Definition], Parser Term))
+    FilePath -> IO (Either ParseError ([Definition], OpTable))
 parseDefinitions f = do
     source <- readFile f
     case parseInfixes source of
         Right table -> do
             let term = makeTermParser table
             case parse (definitions term <* eof) f source of
-                Right defs -> return $ Right (defs, term)
+                Right defs -> return $ Right (defs, table)
                 Left e -> return $ Left e
         Left p -> return $ Left p
   where
