@@ -1,4 +1,6 @@
 -- Justify your changes in the report.
+-- TODO: Application as a whole. When parsing application, a constructor must be
+-- inside parentheses.
 
 module Parser (parseDefinitions, parseInfixes, parseCommand, parseTerm) where
 
@@ -122,7 +124,25 @@ value term = constructorValue term <|> lambdaValue term
             >> Lambda <$> variableName <*> (strings "." >> term)
 
 makeTermParser :: OpTable -> Parser Term
-makeTermParser table = undefined
+makeTermParser table = termParser table table
+  where
+    -- Partial table -> Full table -> Parser Term
+    termParser :: OpTable -> OpTable -> Parser Term
+    termParser (OpTable []) fullTable = makeLiteralParser fullTable
+    termParser (OpTable ((InfixL, ops) : rest)) fullTable =
+        chainl1 (termParser (OpTable rest) fullTable) (opParser ops)
+    termParser (OpTable ((InfixR, ops) : rest)) fullTable =
+        chainr1 (termParser (OpTable rest) fullTable) (opParser ops)
+    termParser (OpTable ((Infix, ops) : rest)) fullTable = do
+        let subTerm = termParser (OpTable rest) fullTable
+        t1 <- subTerm
+        o <- opParser ops
+        (o t1) <$> subTerm
+
+    opParser :: [Op] -> Parser (Term -> Term -> Term)
+    opParser ops = do
+        o <- choice $ map (try . strings) ops
+        return (\t1 t2 -> Application (Application (Variable o) t1) t2)
 
 makeLiteralParser :: OpTable -> Parser Term
 makeLiteralParser table =
