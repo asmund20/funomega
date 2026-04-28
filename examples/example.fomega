@@ -1,0 +1,23 @@
+data Bool = | True | False .
+
+data Nat = | Z | Nat .
+
+infixr 4 b0 & b1 =
+    case b0 of
+    ; True -> b1
+    ; False -> False .
+
+infixl 3 b0 | b1 =
+    case b0 of
+    ; True -> True
+    ; False -> b1 .
+
+not : Bool -> Bool =
+    fun b ->
+        case b of
+        ; True -> False
+        ; False -> True .
+
+xor : Bool -> Bool -> Bool =
+    fun b0 ->
+    fun b1 -> b0 | b1 & not (b0 & b1) .
