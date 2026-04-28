@@ -62,16 +62,15 @@ parseTerm table = parse (makeTermParser table <* eof) "term"
 
 -- TODO: Might want to do the IO in the driver
 parseDefinitions ::
-    FilePath -> IO (Either ParseError ([Definition], OpTable))
-parseDefinitions f = do
-    source <- readFile f
+    String -> Either ParseError ([Definition], OpTable)
+parseDefinitions source = do
     case parseInfixes source of
         Right table -> do
             let term = makeTermParser table
-            case parse (definitions term <* eof) f source of
-                Right defs -> return $ Right (defs, table)
-                Left e -> return $ Left e
-        Left p -> return $ Left p
+            case parse (definitions term <* eof) "files" source of
+                Right defs -> Right (defs, table)
+                Left e -> Left e
+        Left p -> Left p
   where
     definitions term = endBy (definition term) (strings ".")
 
