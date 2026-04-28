@@ -8,9 +8,13 @@ import Data.List (groupBy, sortBy)
 import Data.Maybe (catMaybes)
 import Syntax
 import Text.Parsec (parserFail)
-import Text.Parsec.Expr
+import Text.Parsec.Error (Message (Message), newErrorMessage)
+import Text.Parsec.Pos (initialPos)
+import Text.Parsec.Prim (ParsecT)
 import Text.Parsec.Token (GenTokenParser (reservedOp))
 import Text.ParserCombinators.Parsec
+
+-- Reserved names
 
 reservedVariableNames :: [String]
 reservedVariableNames =
@@ -30,37 +34,48 @@ reservedOpNames =
     , ":"
     ]
 
-parseCommand :: Prompt -> Either ParseError Command
-parseCommand = parse (command <* eof) "command"
+-- Exported parsing functions
 
-command :: Parser Command
-command =
+parseCommand :: OpTable -> Prompt -> Either ParseError Command
+parseCommand table = parse (command (makeTermParser table) <* eof) "command"
+
+command :: Parser Term -> Parser Command
+command term =
     (char ':' >> (load <|> reload <|> help <|> quit))
-        <|> eval
+        <|> eval term
   where
     load :: Parser Command
     load = strings "l" >> Load <$> many anyChar
     reload :: Parser Command
     reload = strings "r" >> return Reload
-    eval :: Parser Command
-    eval = Eval <$> term
+    eval :: Parser Term -> Parser Command
+    -- TODO: Should be some value somewhere maybe
+    eval term = Eval <$> term
     help :: Parser Command
     help = strings "?" >> return Help
     quit :: Parser Command
     quit = strings "q" >> return Quit
 
 -- TODO: Probably delete this
-parseTerm :: String -> Either ParseError Term
-parseTerm = parse (term <* eof) "term"
+parseTerm :: OpTable -> String -> Either ParseError Term
+parseTerm table = parse (makeTermParser table <* eof) "term"
 
 -- TODO: Might want to do the IO in the driver
-parseDefinitions :: FilePath -> IO (Either ParseError [Definition])
-parseDefinitions f = parseFromFile (definitions <* eof) f
+parseDefinitions ::
+    String -> Either ParseError ([Definition], OpTable)
+parseDefinitions source = do
+    case parseInfixes source of
+        Right table -> do
+            let term = makeTermParser table
+            case parse (definitions term <* eof) "files" source of
+                Right defs -> Right (defs, table)
+                Left e -> Left e
+        Left p -> Left p
   where
-    definitions = sepBy definition (strings ".")
+    definitions term = endBy (definition term) (strings ".")
 
-definition :: Parser Definition
-definition = dataDef <|> binOpDef <|> varDef
+definition :: Parser Term -> Parser Definition
+definition term = dataDef <|> binOpDef term <|> varDef term
   where
     dataDef :: Parser Definition
     dataDef = do
@@ -71,8 +86,8 @@ definition = dataDef <|> binOpDef <|> varDef
         constructors <-
             many1 (strings "|" >> pair <$> constructorName <*> many typeParser)
         return $ DataDef dataName vars constructors
-    binOpDef :: Parser Definition
-    binOpDef = do
+    binOpDef :: Parser Term -> Parser Definition
+    binOpDef term = do
         fixity
         nat
         x0 <- variableName
@@ -87,8 +102,8 @@ definition = dataDef <|> binOpDef <|> varDef
                 op
                 (TypeVar "a" :->: (TypeVar "b" :->: TypeVar "c"))
                 (Function x0 (Function x1 t))
-    varDef :: Parser Definition
-    varDef =
+    varDef :: Parser Term -> Parser Definition
+    varDef term =
         VarDef
             <$> ( variableName
                     *> strings ":"
@@ -97,66 +112,94 @@ definition = dataDef <|> binOpDef <|> varDef
             <*> (strings "=" >> term)
     pair a b = (a, b)
 
+-- The parsers used in second pass
+
+value :: Parser Term -> Parser Value
+value term = constructorValue term <|> lambdaValue term
+  where
+    constructorValue term = Value <$> constructorName <*> many (value term)
+    lambdaValue term =
+        strings "\\"
+            >> Lambda <$> variableName <*> (strings "." >> term)
+
+makeTermParser :: OpTable -> Parser Term
+makeTermParser table = termParser table table
+  where
+    -- Partial table -> Full table -> Parser Term
+    termParser :: OpTable -> OpTable -> Parser Term
+    termParser (OpTable []) fullTable = appOrCons fullTable
+    termParser (OpTable ((InfixL, ops) : rest)) fullTable =
+        chainl1 (termParser (OpTable rest) fullTable) (opParser ops)
+    termParser (OpTable ((InfixR, ops) : rest)) fullTable =
+        chainr1 (termParser (OpTable rest) fullTable) (opParser ops)
+    termParser (OpTable ((Infix, ops) : rest)) fullTable = do
+        let subTerm = termParser (OpTable rest) fullTable
+        t1 <- subTerm
+        o <- opParser ops
+        (o t1) <$> subTerm
+    opParser :: [Op] -> Parser (Term -> Term -> Term)
+    opParser ops = do
+        o <- choice $ map (try . strings) ops
+        return (\t1 t2 -> Application (Application (Variable o) t1) t2)
+
+appOrCons :: OpTable -> Parser Term
+appOrCons table =
+    ( Constructor
+        <$> constructorName
+        <*> many (literal table)
+    )
+        <|> (chainl1 (literal table) (return Application))
+  where
+    literal table =
+        choice
+            [ functionTerm table
+            , caseTerm table
+            , parenTerm table
+            , Variable <$> variableName
+            , Constructor <$> constructorName <*> pure []
+            ]
+    functionTerm :: OpTable -> Parser Term
+    functionTerm table =
+        try $
+            strings "fun"
+                >> Function <$> variableName <*> (strings "->" >> makeTermParser table)
+    caseTerm :: OpTable -> Parser Term
+    caseTerm table =
+        try $
+            strings "case"
+                >> Case
+                    <$> makeTermParser table
+                    <*> ( strings "of"
+                            >> many (caseInstance table)
+                        )
+    parenTerm :: OpTable -> Parser Term
+    parenTerm table = strings "(" *> (makeTermParser table) <* strings ")"
+    caseInstance :: OpTable -> Parser (Pattern, Term)
+    caseInstance table = strings ";" >> pair <$> pattern <*> (strings "->" >> (makeTermParser table))
+    pair l r = (l, r)
+
+pattern :: Parser Pattern
+pattern = topLevel
+  where
+    topLevel =
+        varPattern
+            <|> topLevelConstructorPattern
+            <|> parenPattern
+    lowerLevel = varPattern <|> lowerLevelConstructorPattern <|> parenPattern
+    varPattern = VarPat <$> variableName
+    topLevelConstructorPattern :: Parser Pattern
+    topLevelConstructorPattern = ConPat <$> constructorName <*> many pattern
+    lowerLevelConstructorPattern :: Parser Pattern
+    lowerLevelConstructorPattern = ConPat <$> constructorName <*> pure []
+    parenPattern :: Parser Pattern
+    parenPattern = strings "(" *> topLevel <* strings ")"
+
 typeParser :: Parser Type
 typeParser = chainr1 typeLit typeArrow
   where
     typeLit = (Prim <$> dataTypeName <*> many typeVar) <|> typeVar
     typeVar = TypeVar <$> variableName
     typeArrow = strings "->" >> return (:->:)
-
-literal :: Parser Term
-literal =
-    functionTerm <|> caseTerm <|> parenTerm <|> Variable
-        <$> variableName <|> Constructor
-        <$> constructorName
-        <*> many term
-  where
-    functionTerm :: Parser Term
-    functionTerm =
-        strings "fun"
-            >> Function <$> variableName <*> (strings "->" >> term)
-    caseTerm :: Parser Term
-    caseTerm =
-        strings "case"
-            >> Case
-                <$> term
-                <*> ( strings "of"
-                        >> many caseInstance
-                    )
-    parenTerm :: Parser Term
-    parenTerm = strings "(" *> term <* strings ")"
-    caseInstance = strings ";" >> pair <$> pattern <*> (strings "->" >> term)
-    pair l r = (l, r)
-    pattern :: Parser Pattern
-    pattern = VarPat <$> variableName <|> ConPat <$> constructorName <*> many pattern
-
-makeTable :: OpTable -> [Operator String () Identity Term]
-makeTable (OpTable t) = concat $ map mapper t
-  where
-    mapper :: (Fixity, [Op]) -> [Operator String () Identity Term]
-    mapper (_, []) = []
-    mapper (f, (o : os)) = binary o (binOpCall o) (fixityToAssoc f) : mapper (f, os)
-    binary :: String -> (a -> a -> a) -> Assoc -> Operator String () Identity a
-    binary name fun assoc =
-        Text.Parsec.Expr.Infix (strings name >> return fun) assoc
-    binOpCall :: X -> Term -> Term -> Term
-    binOpCall o t1 t2 = Application (Application (Variable o) t1) t2
-    fixityToAssoc :: Fixity -> Assoc
-    fixityToAssoc Syntax.Infix = AssocNone
-    fixityToAssoc InfixL = AssocLeft
-    fixityToAssoc InfixR = AssocRight
-
--- Must use buildExpressionParser here
-term :: Parser Term
-term = undefined
-
-value :: Parser Value
-value = constructorValue <|> lambdaValue
-  where
-    constructorValue = Value <$> constructorName <*> many value
-    lambdaValue =
-        strings "\\"
-            >> Lambda <$> variableName <*> (strings "." >> term)
 
 strings :: String -> Parser String
 strings s = string s <* spaces
@@ -183,7 +226,7 @@ binOpName = many1 (satisfy binOpChar) <* spaces >>= check
         | otherwise = return name
 
 variableName :: Parser X
-variableName = (:) <$> lower <*> many alphaNum <* spaces >>= check
+variableName = try $ (:) <$> lower <*> many alphaNum <* spaces >>= check
   where
     check name
         | name `elem` reservedVariableNames =
@@ -205,22 +248,36 @@ nat = zero <|> nonzero
     zero = char '0' >> return 0 <* spaces
     nonzero = read <$> many1 digit <* spaces
 
--- Under here is the code for the first pass of the parsing, which is extracting
--- the infix operators.
+-- Below here are are the parsers used only for first pass
 
 -- | Parse the infix operators
 parseInfixes :: String -> Either ParseError OpTable
 parseInfixes s = do
     operators <- parse (infixity <* eof) "infixes" s
-    let sorted = sortBy sorting operators
+    let sorted = reverse $ sortBy sorting operators
         groups = groupBy grouping sorted
+        -- TODO: Test this with a function that just loops through the list
+        -- instead of a second group by. Use grouping only by precedence, and
+        -- check that all the fixities are the same.
+        testGroups = groupBy testGrouping sorted
         withoutPrec = map (map removePrec) groups
         extractedInfixity = map extractInfixity withoutPrec
 
-    return $ OpTable $ map extractInfixity withoutPrec
+    if (testGroups == groups)
+        then
+            Right $ OpTable $ map extractInfixity withoutPrec
+        else
+            Left $
+                newErrorMessage
+                    ( Message
+                        "Detected operators with same precedence but different associativity, not allowed"
+                    )
+                    (initialPos "infixes")
   where
     grouping :: (Fixity, Prec, Op) -> (Fixity, Prec, Op) -> Bool
     grouping (f1, p1, _) (f2, p2, _) = f1 == f2 && p1 == p2
+    testGrouping :: (Fixity, Prec, Op) -> (Fixity, Prec, Op) -> Bool
+    testGrouping (_, p1, _) (_, p2, _) = p1 == p2
     sorting (_, l, _) (_, r, _) = compare l r
     removePrec (f, _, n) = (f, n)
     extractInfixity l@((i, _) : _) = (i, map second l)
@@ -243,5 +300,4 @@ parseInfixes s = do
 
     fixityEx :: Parser (Prec -> Op -> (Fixity, Prec, Op))
     fixityEx = triple <$> fixity
-      where
-        triple fst snd trd = (fst, snd, trd)
+    triple fst snd trd = (fst, snd, trd)

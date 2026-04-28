@@ -30,6 +30,8 @@ data Definition
 data OpTable
     = OpTable [(Fixity, [Op])] -- A list of variables, ordered by precedence.
     deriving (Eq, Show)
+emptyOpTable :: OpTable
+emptyOpTable = OpTable []
 
 data Type
     = Prim D [Type] -- A primitive type.
