@@ -128,7 +128,7 @@ makeTermParser table = termParser table table
   where
     -- Partial table -> Full table -> Parser Term
     termParser :: OpTable -> OpTable -> Parser Term
-    termParser (OpTable []) fullTable = makeSubTermParser fullTable
+    termParser (OpTable []) fullTable = appOrCons fullTable
     termParser (OpTable ((InfixL, ops) : rest)) fullTable =
         chainl1 (termParser (OpTable rest) fullTable) (opParser ops)
     termParser (OpTable ((InfixR, ops) : rest)) fullTable =
@@ -138,32 +138,27 @@ makeTermParser table = termParser table table
         t1 <- subTerm
         o <- opParser ops
         (o t1) <$> subTerm
-
     opParser :: [Op] -> Parser (Term -> Term -> Term)
     opParser ops = do
         o <- choice $ map (try . strings) ops
         return (\t1 t2 -> Application (Application (Variable o) t1) t2)
 
-makeSubTermParser :: OpTable -> Parser Term
-makeSubTermParser table = do
-    t <- firstTerm table
-    ts <- sepBy (consecutiveTerms table) (space >> spaces)
-    return $ foldl (Application) t ts
+appOrCons :: OpTable -> Parser Term
+appOrCons table =
+    ( Constructor
+        <$> constructorName
+        <*> many (literal table)
+    )
+        <|> (chainl1 (literal table) (return Application))
   where
-    withoutConstructor table =
-        [ functionTerm table
-        , caseTerm table
-        , parenTerm table
-        , Variable <$> variableName
-        ]
-    firstTerm table = choice $ fullConstructor : (withoutConstructor table)
-    -- TODO: Should never use fullConstructor? Or fullConstructor should be
-    -- changed to be like application. A constructor does not actually parse any
-    -- term, just variable names, constructor names and parenthesized terms
-    consecutiveTerms table = choice $ partialConstructor : (withoutConstructor table)
-    fullConstructor = Constructor <$> constructorName <*> many (makeTermParser table)
-    partialConstructor :: Parser Term
-    partialConstructor = Constructor <$> constructorName <*> pure []
+    literal table =
+        choice
+            [ functionTerm table
+            , caseTerm table
+            , parenTerm table
+            , Variable <$> variableName
+            , Constructor <$> constructorName <*> pure []
+            ]
     functionTerm :: OpTable -> Parser Term
     functionTerm table =
         try $
@@ -183,10 +178,9 @@ makeSubTermParser table = do
     caseInstance :: OpTable -> Parser (Pattern, Term)
     caseInstance table = strings ";" >> pair <$> pattern <*> (strings "->" >> (makeTermParser table))
     pair l r = (l, r)
-    pattern :: Parser Pattern
-    pattern = VarPat <$> variableName <|> ConPat <$> constructorName <*> many pattern
 
--- Below here are the parsers that can be used in both passes
+pattern :: Parser Pattern
+pattern = VarPat <$> variableName <|> ConPat <$> constructorName <*> many pattern
 
 typeParser :: Parser Type
 typeParser = chainr1 typeLit typeArrow
