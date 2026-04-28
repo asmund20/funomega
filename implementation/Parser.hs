@@ -73,7 +73,7 @@ parseDefinitions f = do
                 Left e -> return $ Left e
         Left p -> return $ Left p
   where
-    definitions term = sepBy (definition term) (strings ".")
+    definitions term = endBy (definition term) (strings ".")
 
 definition :: Parser Term -> Parser Definition
 definition term = dataDef <|> binOpDef term <|> varDef term
@@ -214,7 +214,7 @@ binOpName = many1 (satisfy binOpChar) <* spaces >>= check
         | otherwise = return name
 
 variableName :: Parser X
-variableName = (:) <$> lower <*> many alphaNum <* spaces >>= check
+variableName = try $ (:) <$> lower <*> many alphaNum <* spaces >>= check
   where
     check name
         | name `elem` reservedVariableNames =
