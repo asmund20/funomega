@@ -1,6 +1,4 @@
 -- Justify your changes in the report.
--- TODO: Application as a whole. When parsing application, a constructor must be
--- inside parentheses.
 
 module Parser (parseDefinitions, parseInfixes, parseCommand, parseTerm) where
 
@@ -128,7 +126,7 @@ makeTermParser table = termParser table table
   where
     -- Partial table -> Full table -> Parser Term
     termParser :: OpTable -> OpTable -> Parser Term
-    termParser (OpTable []) fullTable = makeLiteralParser fullTable
+    termParser (OpTable []) fullTable = makeSubTermParser fullTable
     termParser (OpTable ((InfixL, ops) : rest)) fullTable =
         chainl1 (termParser (OpTable rest) fullTable) (opParser ops)
     termParser (OpTable ((InfixR, ops) : rest)) fullTable =
@@ -144,26 +142,35 @@ makeTermParser table = termParser table table
         o <- choice $ map (try . strings) ops
         return (\t1 t2 -> Application (Application (Variable o) t1) t2)
 
--- TODO: Treat application as a literal?
-makeLiteralParser :: OpTable -> Parser Term
-makeLiteralParser table =
-    (functionTerm table) <|> (caseTerm table) <|> (parenTerm table) <|> Variable
-        <$> variableName <|> Constructor
-        <$> constructorName
-        <*> many (makeTermParser table)
+makeSubTermParser :: OpTable -> Parser Term
+makeSubTermParser table = do
+    t <- firstTerm table
+    ts <- sepBy (consecutiveTerms table) (space >> spaces)
+    return $ foldl (Application) t ts
   where
+    withoutConstructor :: OpTable -> Parser Term
+    withoutConstructor table =
+        functionTerm table <|> caseTerm table <|> parenTerm table <|> Variable
+            <$> variableName
+    firstTerm table = withoutConstructor table <|> fullConstructor
+    consecutiveTerms table = withoutConstructor table <|> partialConstructor
+    fullConstructor = Constructor <$> constructorName <*> many (makeTermParser table)
+    partialConstructor :: Parser Term
+    partialConstructor = Constructor <$> constructorName <*> pure []
     functionTerm :: OpTable -> Parser Term
     functionTerm table =
-        strings "fun"
-            >> Function <$> variableName <*> (strings "->" >> makeTermParser table)
+        try $
+            strings "fun"
+                >> Function <$> variableName <*> (strings "->" >> makeTermParser table)
     caseTerm :: OpTable -> Parser Term
     caseTerm table =
-        strings "case"
-            >> Case
-                <$> makeTermParser table
-                <*> ( strings "of"
-                        >> many (caseInstance table)
-                    )
+        try $
+            strings "case"
+                >> Case
+                    <$> makeTermParser table
+                    <*> ( strings "of"
+                            >> many (caseInstance table)
+                        )
     parenTerm :: OpTable -> Parser Term
     parenTerm table = strings "(" *> (makeTermParser table) <* strings ")"
     caseInstance :: OpTable -> Parser (Pattern, Term)
