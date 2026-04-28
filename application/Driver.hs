@@ -1,7 +1,34 @@
-module Main where
+{-# LANGUAGE RecordWildCards #-}
 
+module Main (main) where
+
+import Control.Monad (forM)
+import Control.Monad.State
+import Data.List (intercalate)
 import Editor
+import Parser
+import Syntax
+import System.Exit (exitSuccess)
 import System.IO
+
+data ReplState = ReplState
+    { rsFiles :: [FilePath]
+    , rsOpTable :: OpTable
+    , rsDefinitions :: [Definition]
+    }
+
+type ReplM = StateT ReplState IO
+
+addFile :: FilePath -> ReplM ()
+addFile f = do
+    files <- rsFiles <$> get
+    modify' $ \st -> st{rsFiles = f : files}
+
+setTable :: OpTable -> ReplM ()
+setTable t = modify' $ \st -> st{rsOpTable = t}
+
+setDefinitions :: [Definition] -> ReplM ()
+setDefinitions ds = modify' $ \st -> st{rsDefinitions = ds}
 
 -- ==== config ==== --
 
@@ -12,61 +39,97 @@ width = 80
 
 main :: IO ()
 main =
-  noBuffering $
-  do messagebox [ "Welcome to funOmega version 0.0.1"
-                , ""
-                , " - In this interactive environment, you can type in terms"
-                , "   to evaluate them."
-                , ""
-                , " - For additional help, type in ':?'"
-                , ""
-                ]
-     repl
+    noBuffering $ do
+        messagebox
+            [ "Welcome to funOmega version 0.0.1"
+            , ""
+            , " - In this interactive environment, you can type in terms"
+            , "   to evaluate them."
+            , ""
+            , " - For additional help, type in ':?'"
+            , ""
+            ]
+        evalStateT
+            repl
+            ReplState
+                { rsFiles = []
+                , rsOpTable = emptyOpTable
+                , rsDefinitions = []
+                }
 
-repl :: IO ()
-repl =
-  do x <- runLineEditor "funOmega> " $ takeInput >>= remember
-     putStrLn $ "your code should do something with '" ++ x ++ "' here {^o^}"
-     repl
+repl :: ReplM ()
+repl = do
+    x <- lift $ runLineEditor "funOmega> " $ takeInput >>= remember
+    table <- rsOpTable <$> get
+    case parseCommand table x of
+        Left e -> lift $ print e
+        Right Quit -> lift exitSuccess
+        Right c -> do
+            case c of
+                -- Add the file to the loaded files list, then read all the files in there and intercalate them with line breaks, then parse the definitions.
+                Load f -> do
+                    addFile f
+                    loadFiles
+                -- Just reload the program
+                Reload -> loadFiles
+                Eval t -> lift $ print "Eval is not implemented"
+                Help -> lift printHelp
+    repl
+
+printHelp :: IO ()
+printHelp = messagebox ["Help is not yet implemented"]
+
+loadFiles :: ReplM ()
+loadFiles = do
+    table <- rsOpTable <$> get
+    files <- rsFiles <$> get
+    sources <- lift $ forM files readFile
+    let source = intercalate "\n" sources
+    case parseDefinitions source of
+        Left e -> lift $ print e
+        Right (defs, table) -> do
+            setDefinitions defs
+            setTable table
+            lift $ messagebox $ ["Successfylly loaded files "] ++ files
 
 -- ==== util ==== --
 
 newline :: IO ()
 newline = putStr ""
 
-initline  :: IO ()
-initline =
-  do putStr "*"
-     putStrLn $ replicate (width - 1) '='
+initline :: IO ()
+initline = do
+    putStr "*"
+    putStrLn $ replicate (width - 1) '='
 
 endline :: IO ()
-endline =
-  do putStr $ replicate (width - 1) '='
-     putStrLn "*"
+endline = do
+    putStr $ replicate (width - 1) '='
+    putStrLn "*"
 
 putBoxLine :: String -> IO ()
-putBoxLine x =
-  do putStr "| "
-     putStr x
-     putStr $ replicate ((width - 4 ) - length x) ' '
-     putStrLn " |"
+putBoxLine x = do
+    putStr "| "
+    putStr x
+    putStr $ replicate ((width - 4) - length x) ' '
+    putStrLn " |"
 
 messagebox :: [String] -> IO ()
-messagebox xs =
-  do initline
-     mapM_ putBoxLine xs
-     endline
+messagebox xs = do
+    initline
+    mapM_ putBoxLine xs
+    endline
 
 noBuffering :: IO a -> IO a
-noBuffering op =
-  do stdinEcho        <- hGetEcho stdin
-     stdinBufferMode  <- hGetBuffering stdin
-     stdoutBufferMode <- hGetBuffering stdout
-     hSetEcho      stdin  False
-     hSetBuffering stdin  NoBuffering
-     hSetBuffering stdout NoBuffering
-     a <- op
-     hSetEcho      stdin  stdinEcho
-     hSetBuffering stdin  stdinBufferMode
-     hSetBuffering stdout stdoutBufferMode
-     return a
+noBuffering op = do
+    stdinEcho <- hGetEcho stdin
+    stdinBufferMode <- hGetBuffering stdin
+    stdoutBufferMode <- hGetBuffering stdout
+    hSetEcho stdin False
+    hSetBuffering stdin NoBuffering
+    hSetBuffering stdout NoBuffering
+    a <- op
+    hSetEcho stdin stdinEcho
+    hSetBuffering stdin stdinBufferMode
+    hSetBuffering stdout stdoutBufferMode
+    return a
