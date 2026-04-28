@@ -148,12 +148,14 @@ makeSubTermParser table = do
     ts <- sepBy (consecutiveTerms table) (space >> spaces)
     return $ foldl (Application) t ts
   where
-    withoutConstructor :: OpTable -> Parser Term
     withoutConstructor table =
-        functionTerm table <|> caseTerm table <|> parenTerm table <|> Variable
-            <$> variableName
-    firstTerm table = withoutConstructor table <|> fullConstructor
-    consecutiveTerms table = withoutConstructor table <|> partialConstructor
+        [ functionTerm table
+        , caseTerm table
+        , parenTerm table
+        , Variable <$> variableName
+        ]
+    firstTerm table = choice $ fullConstructor : (withoutConstructor table)
+    consecutiveTerms table = choice $ partialConstructor : (withoutConstructor table)
     fullConstructor = Constructor <$> constructorName <*> many (makeTermParser table)
     partialConstructor :: Parser Term
     partialConstructor = Constructor <$> constructorName <*> pure []
