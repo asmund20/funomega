@@ -157,6 +157,9 @@ makeSubTermParser table = do
         , Variable <$> variableName
         ]
     firstTerm table = choice $ fullConstructor : (withoutConstructor table)
+    -- TODO: Should never use fullConstructor? Or fullConstructor should be
+    -- changed to be like application. A constructor does not actually parse any
+    -- term, just variable names, constructor names and parenthesized terms
     consecutiveTerms table = choice $ partialConstructor : (withoutConstructor table)
     fullConstructor = Constructor <$> constructorName <*> many (makeTermParser table)
     partialConstructor :: Parser Term
