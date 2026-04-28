@@ -8,6 +8,8 @@ import Data.List (groupBy, sortBy)
 import Data.Maybe (catMaybes)
 import Syntax
 import Text.Parsec (parserFail)
+import Text.Parsec.Error (Message (Message), newErrorMessage)
+import Text.Parsec.Pos (initialPos)
 import Text.Parsec.Prim (ParsecT)
 import Text.Parsec.Token (GenTokenParser (reservedOp))
 import Text.ParserCombinators.Parsec
@@ -239,24 +241,31 @@ nat = zero <|> nonzero
 
 -- Below here are are the parsers used only for first pass
 
--- TODO: Check that there are only operator of the same fixity on the same
--- precedence level somehow.
-
 -- | Parse the infix operators
 parseInfixes :: String -> Either ParseError OpTable
 parseInfixes s = do
-    case parse (infixity <* eof) "infixes" s of
-        Left e -> Left e
-        Right operators -> do
-            let sorted = reverse $ sortBy sorting operators
-                groups = groupBy grouping sorted
-                withoutPrec = map (map removePrec) groups
-                extractedInfixity = map extractInfixity withoutPrec
+    operators <- parse (infixity <* eof) "infixes" s
+    let sorted = reverse $ sortBy sorting operators
+        groups = groupBy grouping sorted
+        testGroups = groupBy testGrouping sorted
+        withoutPrec = map (map removePrec) groups
+        extractedInfixity = map extractInfixity withoutPrec
 
+    if (testGroups == groups)
+        then
             Right $ OpTable $ map extractInfixity withoutPrec
+        else
+            Left $
+                newErrorMessage
+                    ( Message
+                        "Detected operators with same precedence but different associativity, not allowed"
+                    )
+                    (initialPos "infixes")
   where
     grouping :: (Fixity, Prec, Op) -> (Fixity, Prec, Op) -> Bool
     grouping (f1, p1, _) (f2, p2, _) = f1 == f2 && p1 == p2
+    testGrouping :: (Fixity, Prec, Op) -> (Fixity, Prec, Op) -> Bool
+    testGrouping (_, p1, _) (_, p2, _) = p1 == p2
     sorting (_, l, _) (_, r, _) = compare l r
     removePrec (f, _, n) = (f, n)
     extractInfixity l@((i, _) : _) = (i, map second l)
