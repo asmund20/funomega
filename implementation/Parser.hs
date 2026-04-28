@@ -180,7 +180,20 @@ appOrCons table =
     pair l r = (l, r)
 
 pattern :: Parser Pattern
-pattern = VarPat <$> variableName <|> ConPat <$> constructorName <*> many pattern
+pattern = topLevel
+  where
+    topLevel =
+        varPattern
+            <|> topLevelConstructorPattern
+            <|> parenPattern
+    lowerLevel = varPattern <|> lowerLevelConstructorPattern <|> parenPattern
+    varPattern = VarPat <$> variableName
+    topLevelConstructorPattern :: Parser Pattern
+    topLevelConstructorPattern = ConPat <$> constructorName <*> many pattern
+    lowerLevelConstructorPattern :: Parser Pattern
+    lowerLevelConstructorPattern = ConPat <$> constructorName <*> pure []
+    parenPattern :: Parser Pattern
+    parenPattern = strings "(" *> topLevel <* strings ")"
 
 typeParser :: Parser Type
 typeParser = chainr1 typeLit typeArrow
