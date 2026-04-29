@@ -77,7 +77,15 @@ repl = do
     repl
 
 printHelp :: IO ()
-printHelp = messagebox ["Help is not yet implemented"]
+printHelp =
+    messagebox
+        [ "You can either run a command or type in a funOmega term here."
+        , "Commands:"
+        , "- :? ==> Print this help message"
+        , "- :q ==> Quit the repl"
+        , "- :l <path> ==> Load the definitions in a funOmega file"
+        , "- :r ==> Reload the loaded funOmega files"
+        ]
 
 loadFiles :: ReplM ()
 loadFiles = do
@@ -88,6 +96,7 @@ loadFiles = do
     case parseDefinitions source of
         Left e -> lift $ print e
         Right (defs, table) -> do
+            -- TODO: add type checker call here
             setDefinitions defs
             setTable table
             lift $ messagebox $ ["Successfylly loaded files "] ++ files
