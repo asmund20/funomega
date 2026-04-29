@@ -29,6 +29,5 @@ cabal.project.local~
 # End of https://www.toptal.com/developers/gitignore/api/haskell
 
 *.pdf
-*.typ
 !task.pdf
 funOmegaHistory
