@@ -38,6 +38,9 @@ instance Monad Runtime where
                  in x2
             )
 
+abort :: RuntimeError -> Runtime a
+abort re = Runtime (const (Left re))
+
 interpretTerm :: [Definition] -> Term -> Either RuntimeError Value
 interpretTerm ds t = run (eval t) (defListToProgram ds)
 
@@ -74,6 +77,43 @@ mgu :: Pattern -> Value -> Runtime Substitution
 mgu = undefined
 
 eval :: Term -> Runtime Value
-eval t = do
-    traceM "Top of eval term"
-    undefined
+eval (Variable x) = getVar x >>= eval
+eval (Constructor c ts) = do
+    vals <- mapM eval ts
+    return $ Value c vals
+eval (Function x t) = return $ Lambda x t
+eval (Application t0 t1) = do
+    v0 <- eval t0
+    case v0 of
+        Lambda x t -> do
+            v1 <- eval t1
+            replace x (toTerm v1) t >>= eval
+        _ -> abort "Cannot apply a constructor value to something"
+eval (Case t []) = abort $ "None of the cases matched the term " ++ show t
+eval (Case t ((pat, term) : pts)) = undefined
+
+replace :: X -> Term -> Term -> Runtime Term
+replace x t (Variable x')
+    | x' == x = return t
+    | otherwise = return $ Variable x'
+replace x t (Constructor c ts) = do
+    vs <- mapM (replace x t) ts
+    return $ Constructor c vs
+replace x t (Function x' t')
+    | x == x' = return $ Function x' t'
+    | otherwise = replace x t t'
+replace x t (Application t1 t2) = do
+    t1' <- replace x t t1
+    t2' <- replace x t t2
+    return $ Application t1' t2'
+replace x t (Case tc pts) = do
+    tc' <- replace x t tc
+    return $ Case tc' pts
+
+getVar :: X -> Runtime Term
+getVar x =
+    Runtime
+        ( \env -> case gamma env x of
+            Nothing -> Left $ "Undefined variable " ++ x
+            Just (_, t) -> Right t
+        )
