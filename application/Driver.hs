@@ -6,6 +6,7 @@ import Control.Monad (forM)
 import Control.Monad.State
 import Data.List (intercalate)
 import Editor
+import Interpreter
 import Parser
 import Syntax
 import System.Exit (exitSuccess)
@@ -66,13 +67,16 @@ repl = do
         Right Quit -> lift exitSuccess
         Right c -> do
             case c of
-                -- Add the file to the loaded files list, then read all the files in there and intercalate them with line breaks, then parse the definitions.
                 Load f -> do
                     addFile f
                     loadFiles
-                -- Just reload the program
                 Reload -> loadFiles
-                Eval t -> lift $ print "Eval is not implemented"
+                Eval t -> do
+                    -- TODO: Type checking here
+                    defs <- rsDefinitions <$> get
+                    case interpretTerm defs t of
+                        Left e -> lift $ print e
+                        Right v -> lift $ print v
                 Help -> lift printHelp
     repl
 
