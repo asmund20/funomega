@@ -49,7 +49,6 @@ command term =
     reload :: Parser Command
     reload = strings "r" >> return Reload
     eval :: Parser Term -> Parser Command
-    -- TODO: Should be some value somewhere maybe
     eval term = Eval <$> term
     help :: Parser Command
     help = strings "?" >> return Help
@@ -60,7 +59,6 @@ command term =
 parseTerm :: OpTable -> String -> Either ParseError Term
 parseTerm table = parse (makeTermParser table <* eof) "term"
 
--- TODO: Might want to do the IO in the driver
 parseDefinitions ::
     String -> Either ParseError ([Definition], OpTable)
 parseDefinitions source = do
@@ -95,12 +93,10 @@ definition term = dataDef <|> binOpDef term <|> varDef term
         x1 <- variableName
         strings "="
         t <- term
-        -- TODO: Depending on type inference algorithm, I might need to use
-        -- other names here, preferably ones that are not allowed
         return $
             VarDef
                 op
-                (TypeVar "a" :->: (TypeVar "b" :->: TypeVar "c"))
+                (TypeVar op)
                 (Function x0 (Function x1 t))
     varDef :: Parser Term -> Parser Definition
     varDef term =
