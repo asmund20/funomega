@@ -73,7 +73,7 @@ defListToProgram ((VarDef x ty term) : ds) = addVar x ty term $ defListToProgram
 emptyProgram :: Program
 emptyProgram = Program (const Nothing) (const Nothing)
 
-mgu :: Pattern -> Value -> Runtime Substitution
+mgu :: Pattern -> Value -> Runtime (Maybe Substitution)
 mgu = undefined
 
 eval :: Term -> Runtime Value
@@ -89,8 +89,18 @@ eval (Application t0 t1) = do
             v1 <- eval t1
             replace x (toTerm v1) t >>= eval
         _ -> abort "Cannot apply a constructor value to something"
-eval (Case t []) = abort $ "None of the cases matched the term " ++ show t
-eval (Case t ((pat, term) : pts)) = undefined
+eval (Case t []) = abort $ "Type checker should make sure this never happens"
+eval (Case t pts@((_, _) : _)) = do
+    v <- eval t
+    evalCase v pts
+  where
+    evalCase :: Value -> [(Pattern, Term)] -> Runtime Value
+    evalCase _ [] = abort "None of the patterns matched"
+    evalCase v ((pat, term) : pts) = do
+        mSub <- mgu pat v
+        case mSub of
+            Nothing -> evalCase v pts
+            Just sub -> eval (sub term)
 
 replace :: X -> Term -> Term -> Runtime Term
 replace x t (Variable x')
