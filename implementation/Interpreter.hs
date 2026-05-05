@@ -76,10 +76,12 @@ emptyProgram = Program (const Nothing) (const Nothing)
 mgu :: Pattern -> Value -> Maybe Substitution
 mgu (VarPat x) v = Just $ substitute x v
 mgu p@(ConPat cp ps) v@(Value cv vs)
-    | cp == cv && (toTerm p) == (toTerm v) = do
+    -- \| cp == cv && (toTerm p) == (toTerm v) = do
+    --     subs <- mapM (\(p, v) -> mgu p v) (zip ps vs)
+    --     Just $ foldl (.) id subs
+    | cp == cv = do
         subs <- mapM (\(p, v) -> mgu p v) (zip ps vs)
-        Just $ foldl (.) (\x -> x) subs
-    | otherwise = Nothing
+        Just $ foldl (.) id subs
 mgu _ _ = Nothing
 
 {- | p -> v -> term -> term
@@ -88,6 +90,7 @@ mgu _ _ = Nothing
 substitute :: X -> Value -> Term -> Term
 substitute x v = substitute' (Variable x) (toTerm v)
   where
+    -- TODO: funOmega: implementation/Interpreter.hs:(98,5)-(110,73): Non-exhaustive patterns in function substitute'
     -- Replace t1 with t2 in t3, t1 can only be variable
     substitute' :: Term -> Term -> Term -> Term
     substitute t1 t2 t3@(Variable _)
@@ -133,7 +136,7 @@ eval (Case t pts@((_, _) : _)) = do
     evalCase v pts
   where
     evalCase :: Value -> [(Pattern, Term)] -> Runtime Value
-    evalCase _ [] = abort "None of the patterns matched"
+    evalCase v [] = abort $ "None of the patterns matched " ++ show v
     evalCase v ((pat, term) : pts) = do
         case mgu pat v of
             Nothing -> evalCase v pts
