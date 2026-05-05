@@ -1,7 +1,7 @@
 -- Justify your changes in the report.
 {-# LANGUAGE InstanceSigs #-}
 
-module Interpreter where
+module Interpreter () where
 
 import Control.Monad (liftM)
 import Debug.Trace (trace, traceM)
@@ -74,7 +74,31 @@ emptyProgram :: Program
 emptyProgram = Program (const Nothing) (const Nothing)
 
 mgu :: Pattern -> Value -> Runtime (Maybe Substitution)
-mgu = undefined
+mgu p@(VarPat _) v = return $ Just $ substitute (toTerm p) (toTerm v)
+mgu p v = undefined
+
+{- | t1 -> t2 -> t3 -> term
+| Replace t1 with t2 in t3
+-}
+substitute :: Term -> Term -> Term -> Term
+-- TODO: Pattern match on t3, recursively calling and rebuilding the
+-- composite terms
+substitute t1 t2 (Constructor c ts) =
+    Constructor
+        c
+        (map (substitute t1 t2) ts)
+substitute t1 t2 (Application tl tr) =
+    Application
+        (substitute t1 t2 tl)
+        (substitute t1 t2 tr)
+substitute t1 t2 (Case t cases) = undefined
+substitute t1@(Variable x) t2 t3@(Function n tf)
+    | x == n = t3
+    | otherwise = Function n $ substitute t1 t2 tf
+substitute t1 t2 (Function n t3) = undefined
+substitute t1 t2 t3
+    | t1 == t3 = t2
+    | otherwise = t3
 
 eval :: Term -> Runtime Value
 eval (Variable x) = getVar x >>= eval
