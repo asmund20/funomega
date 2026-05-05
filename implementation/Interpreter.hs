@@ -1,7 +1,7 @@
 -- Justify your changes in the report.
 {-# LANGUAGE InstanceSigs #-}
 
-module Interpreter () where
+module Interpreter (interpretTerm) where
 
 import Control.Monad (liftM)
 import Debug.Trace (trace, traceM)
@@ -135,8 +135,7 @@ eval (Case t pts@((_, _) : _)) = do
     evalCase :: Value -> [(Pattern, Term)] -> Runtime Value
     evalCase _ [] = abort "None of the patterns matched"
     evalCase v ((pat, term) : pts) = do
-        mSub <- mgu pat v
-        case mSub of
+        case mgu pat v of
             Nothing -> evalCase v pts
             Just sub -> eval (sub term)
 
