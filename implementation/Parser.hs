@@ -102,7 +102,7 @@ definition term = dataDef <|> binOpDef term <|> varDef term
     varDef term =
         VarDef
             <$> ( variableName
-                    *> strings ":"
+                    <* strings ":"
                 )
             <*> typeParser
             <*> (strings "=" >> term)
