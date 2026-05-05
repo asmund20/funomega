@@ -73,32 +73,46 @@ defListToProgram ((VarDef x ty term) : ds) = addVar x ty term $ defListToProgram
 emptyProgram :: Program
 emptyProgram = Program (const Nothing) (const Nothing)
 
-mgu :: Pattern -> Value -> Runtime (Maybe Substitution)
-mgu p@(VarPat _) v = return $ Just $ substitute (toTerm p) (toTerm v)
-mgu p v = undefined
+mgu :: Pattern -> Value -> Maybe Substitution
+mgu (VarPat x) v = Just $ substitute x v
+mgu p@(ConPat cp ps) v@(Value cv vs)
+    | cp == cv && (toTerm p) == (toTerm v) = do
+        subs <- mapM (\(p, v) -> mgu p v) (zip ps vs)
+        Just $ foldl (.) (\x -> x) subs
+    | otherwise = Nothing
+mgu _ _ = Nothing
 
-{- | t1 -> t2 -> t3 -> term
-| Replace t1 with t2 in t3
+{- | p -> v -> term -> term
+| Replace toTerm p with toTerm v in t
 -}
-substitute :: Term -> Term -> Term -> Term
--- TODO: Pattern match on t3, recursively calling and rebuilding the
--- composite terms
-substitute t1 t2 (Constructor c ts) =
-    Constructor
-        c
-        (map (substitute t1 t2) ts)
-substitute t1 t2 (Application tl tr) =
-    Application
-        (substitute t1 t2 tl)
-        (substitute t1 t2 tr)
-substitute t1 t2 (Case t cases) = undefined
-substitute t1@(Variable x) t2 t3@(Function n tf)
-    | x == n = t3
-    | otherwise = Function n $ substitute t1 t2 tf
-substitute t1 t2 (Function n t3) = undefined
-substitute t1 t2 t3
-    | t1 == t3 = t2
-    | otherwise = t3
+substitute :: X -> Value -> Term -> Term
+substitute x v = substitute' (Variable x) (toTerm v)
+  where
+    -- Replace t1 with t2 in t3, t1 can only be variable
+    substitute' :: Term -> Term -> Term -> Term
+    substitute t1 t2 t3@(Variable _)
+        | t1 == t3 = t2
+        | otherwise = t3
+    substitute' t1 t2 (Constructor c ts) =
+        Constructor
+            c
+            $ map (substitute' t1 t2) ts
+    substitute' t1 t2 (Application tl tr) =
+        Application
+            (substitute' t1 t2 tl)
+            (substitute' t1 t2 tr)
+    substitute' t1 t2 (Case tc cs) = substituteCase t1 t2 $ Case (substitute' t1 t2 tc) cs
+    substitute' t1@(Variable x) t2 t3@(Function n tf)
+        | x == n = t3
+        | otherwise = Function n $ substitute' t1 t2 tf
+    substitute' t1 t2 (Function n tf) = Function n $ substitute' t1 t2 tf
+    substituteCase t1 t2 t3@(Case _ []) = t3
+    substituteCase t1@(Variable v1) t2 t3@(Case tc (c@((VarPat vc), tp) : cs))
+        | v1 == vc = Case tc $ c : (map (\(p, t) -> (p, substitute' t1 t2 t)) cs)
+        | otherwise =
+            Case tc $
+                ((VarPat vc), substitute' t1 t2 tp)
+                    : (map (\(p, t) -> (p, substitute' t1 t2 t)) cs)
 
 eval :: Term -> Runtime Value
 eval (Variable x) = getVar x >>= eval
