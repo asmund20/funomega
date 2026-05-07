@@ -3,7 +3,9 @@
 module Parser (parseDefinitions, parseInfixes, parseCommand, parseTerm) where
 
 import Data.Char (isAlphaNum, isControl, isSpace)
-import Data.List (groupBy, sortBy)
+import Data.Foldable (Foldable (toList))
+import Data.List (sortBy)
+import Data.List.NonEmpty (NonEmpty ((:|)), groupBy)
 import Data.Maybe (catMaybes)
 import Syntax
 import Text.Parsec (parserFail)
@@ -238,7 +240,7 @@ parseInfixes s = do
         -- instead of a second group by. Use grouping only by precedence, and
         -- check that all the fixities are the same.
         testGroups = groupBy testGrouping sorted
-        withoutPrec = map (map removePrec) groups
+        withoutPrec = map (fmap removePrec) groups
 
     if (testGroups == groups)
         then
@@ -257,12 +259,7 @@ parseInfixes s = do
     testGrouping (_, p1, _) (_, p2, _) = p1 == p2
     sorting (_, l, _) (_, r, _) = compare l r
     removePrec (f, _, n) = (f, n)
-    extractInfixity l@((i, _) : _) = Right (i, map second l)
-    extractInfixity [] =
-        parse
-            (parserFail "Implementation error: Exctracting infixity from empty list")
-            "infixes"
-            ""
+    extractInfixity l@((i, _) :| _) = Right (i, toList $ fmap second l)
     second (_, v) = v
 
     infixity :: Parser [(Fixity, Prec, Op)]
