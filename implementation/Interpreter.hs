@@ -1,10 +1,8 @@
--- Justify your changes in the report.
 {-# LANGUAGE InstanceSigs #-}
 
 module Interpreter (interpretTerm) where
 
 import Control.Monad (liftM)
-import Debug.Trace (trace, traceM)
 import GHC.Base (ap)
 import Syntax
 
@@ -73,6 +71,7 @@ defListToProgram ((VarDef x ty term) : ds) = addVar x ty term $ defListToProgram
 emptyProgram :: Program
 emptyProgram = Program (const Nothing) (const Nothing)
 
+-- TODO: for fib.fomega, fib S results in a valid program. Should not.
 mgu :: Pattern -> Value -> Maybe Substitution
 mgu (VarPat x) v = Just $ substitute x v
 mgu p@(ConPat cp ps) v@(Value cv vs)
