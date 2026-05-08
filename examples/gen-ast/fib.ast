@@ -1,18 +1,12 @@
 [
-DataDef "Nat" [] [("Z",[]), ("S",[Prim "Nat" []])],
-
-VarDef "+" (TypeVar "a" :->: (TypeVar "b" :->: TypeVar "c")) (Function "n1" (Function "n2" (Case (Variable "n1") [(ConPat "Z" [],Variable "n2"),(ConPat "S" [VarPat "n"],Application (Application (Variable "+") (Variable "n")) (Constructor "S" [Variable "n2"]))]))),
-
-VarDef ":" (Prim "Nat" [] :->: Prim "Nat" [])
-    (Function "n" (
-        Case (Variable "n") [
-            (ConPat "Z" [], Constructor "S" [Constructor "Z" []]),
-            (ConPat "S" [ConPat "Z" []], Constructor "S" [Constructor "Z" []]),
-            (ConPat "S" [ConPat "S" [VarPat "num"]],
-                Application 
-                    (Application (Variable "+") (Application (Variable "fib") (Constructor "S" [Variable "num"])))
-                    (Application (Variable "fib") (Variable "num"))
-            )
-        ]
-    ))
-]
+DataDef "Nat" [] [("Z",[]),("S",[Prim "Nat" []])],
+VarDef "+" (TypeVar "+") (
+    Function "n1" (
+        Function "n2" (
+            Case (Variable "n1") [
+                (ConPat "Z" [],Variable "n2"),
+                (ConPat "S" [VarPat "n"],Application (Application (Variable "+") (Variable "n")) (Constructor "S" [Variable "n2"]))]
+        )
+    )
+),
+VarDef "fib" (Prim "Nat" [] :->: Prim "Nat" []) (Function "n" (Case (Variable "n") [(ConPat "Z" [],Constructor "S" [Constructor "Z" []]),(ConPat "S" [ConPat "Z" []],Constructor "S" [Constructor "Z" []]),(ConPat "S" [ConPat "S" [VarPat "num"]],Application (Application (Variable "+") (Application (Variable "fib") (Constructor "S" [Variable "num"]))) (Application (Variable "fib") (Variable "num")))]))]
