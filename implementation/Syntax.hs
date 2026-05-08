@@ -68,7 +68,7 @@ data Command
 data Program
     = Program
     { gamma :: X -> Maybe (Type, Term)
-    , delta :: D -> Maybe ([X], [(C, [Type])])
+    , delta :: C -> Maybe (D, [X], [Type])
     }
 
 -- note that patterns and values are a subset of term, so you can have:

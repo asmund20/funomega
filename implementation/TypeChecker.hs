@@ -14,9 +14,10 @@ data Constraint = Type :==: Type
 type Substitution = [(X, Type)]
 
 newtype Analysis a
-  = Analysis {runCheck :: (Program, Environment) -> Either TypeError ([Constraint], a)}
+    = Analysis
+    {runCheck :: (Program, Environment) -> Either TypeError ([Constraint], a)}
 
-checkTerm :: Term -> Analysis ()
+checkTerm :: Term -> Analysis Type
 checkTerm = undefined
 
 checkProgram :: [Definition] -> Analysis Program

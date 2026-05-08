@@ -46,16 +46,20 @@ interpretTerm ds t = run (eval t) (defListToProgram ds)
 defListToProgram :: [Definition] -> Program
 defListToProgram [] = emptyProgram
 defListToProgram ((DataDef d typeVars constructors) : ds) =
-    addDataType $ defListToProgram ds
+    addDataDef (defListToProgram ds) constructors
   where
-    addDataType :: Program -> Program
-    addDataType prog =
-        prog
-            { delta = \y ->
-                if d == y
-                    then Just (typeVars, constructors)
-                    else delta prog y
-            }
+    addDataDef :: Program -> [(C, [Type])] -> Program
+    addDataDef prog [] = prog
+    addDataDef prog ((c, ts) : cs) =
+        addDataDef
+            ( prog
+                { delta = \y ->
+                    if c == y
+                        then Just (d, typeVars, ts)
+                        else delta prog y
+                }
+            )
+            cs
 defListToProgram ((VarDef x ty term) : ds) = addVar $ defListToProgram ds
   where
     addVar :: Program -> Program
