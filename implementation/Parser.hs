@@ -146,17 +146,17 @@ appOrCons table =
             , Constructor <$> constructorName <*> pure []
             ]
     functionTerm =
-        try $
-            strings "fun"
-                >> Function <$> variableName <*> (strings "->" >> makeTermParser table)
+        try
+            (string "fun" >> space >> spaces)
+            >> Function <$> variableName <*> (strings "->" >> makeTermParser table)
     caseTerm =
-        try $
-            strings "case"
-                >> Case
-                    <$> makeTermParser table
-                    <*> ( strings "of"
-                            >> many caseInstance
-                        )
+        try
+            (string "case" >> space >> spaces)
+            >> Case
+                <$> makeTermParser table
+                <*> ( strings "of"
+                        >> many caseInstance
+                    )
     parenTerm = strings "(" *> (makeTermParser table) <* strings ")"
     caseInstance = strings ";" >> pair <$> pattern <*> (strings "->" >> (makeTermParser table))
     pair l r = (l, r)
