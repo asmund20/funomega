@@ -20,6 +20,7 @@ data ReplState = ReplState
 
 type ReplM = StateT ReplState IO
 
+-- TODO: Make the files a list, or check that the new file is not in there.
 addFile :: FilePath -> ReplM ()
 addFile f = do
     files <- rsFiles <$> get
@@ -63,7 +64,7 @@ repl = do
     x <- lift $ runLineEditor "funOmega> " $ takeInput >>= remember
     table <- rsOpTable <$> get
     case parseCommand table x of
-        Left e -> lift $ print e
+        Left e -> lift $ putStrLn $ show e
         Right Quit -> lift exitSuccess
         Right c -> do
             case c of
@@ -75,8 +76,8 @@ repl = do
                     -- TODO: Type checking here
                     defs <- rsDefinitions <$> get
                     case interpretTerm defs t of
-                        Left e -> lift $ print e
-                        Right v -> lift $ print v
+                        Left e -> lift $ putStrLn $ show e
+                        Right v -> lift $ putStrLn $ prettyValue v
                 Help -> lift printHelp
     repl
 
@@ -93,12 +94,11 @@ printHelp =
 
 loadFiles :: ReplM ()
 loadFiles = do
-    table <- rsOpTable <$> get
     files <- rsFiles <$> get
     sources <- lift $ forM files readFile
     let source = intercalate "\n" sources
     case parseDefinitions source of
-        Left e -> lift $ print e
+        Left e -> lift $ putStrLn $ show e
         Right (defs, table) -> do
             -- TODO: add type checker call here
             setDefinitions defs
@@ -106,9 +106,6 @@ loadFiles = do
             lift $ messagebox $ ["Successfylly loaded files "] ++ files
 
 -- ==== util ==== --
-
-newline :: IO ()
-newline = putStr ""
 
 initline :: IO ()
 initline = do

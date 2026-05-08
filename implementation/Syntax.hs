@@ -73,6 +73,11 @@ data Program
 
 -- note that patterns and values are a subset of term, so you can have:
 
+prettyValue :: Value -> String
+prettyValue (Value c []) = '(' : c ++ ")"
+prettyValue (Value c vs) = '(' : c ++ " " ++ unwords (map prettyValue vs) ++ ")"
+prettyValue (Lambda x t) = "(λ" ++ x ++ "." ++ show t ++ ")"
+
 class IsTerm thing where
     toTerm :: thing -> Term
 
