@@ -11,11 +11,12 @@ import Parser
 import Syntax
 import System.Exit (exitSuccess)
 import System.IO
+import TypeChecker
 
 data ReplState = ReplState
     { rsFiles :: [FilePath]
     , rsOpTable :: OpTable
-    , rsDefinitions :: [Definition]
+    , rsProgram :: Program
     }
 
 type ReplM = StateT ReplState IO
@@ -29,8 +30,8 @@ addFile f = do
 setTable :: OpTable -> ReplM ()
 setTable t = modify' $ \st -> st{rsOpTable = t}
 
-setDefinitions :: [Definition] -> ReplM ()
-setDefinitions ds = modify' $ \st -> st{rsDefinitions = ds}
+setProgram :: Program -> ReplM ()
+setProgram p = modify' $ \st -> st{rsProgram = p}
 
 -- ==== config ==== --
 
@@ -56,7 +57,7 @@ main =
             ReplState
                 { rsFiles = []
                 , rsOpTable = emptyOpTable
-                , rsDefinitions = []
+                , rsProgram = Program (const Nothing) (const Nothing)
                 }
 
 repl :: ReplM ()
@@ -73,11 +74,13 @@ repl = do
                     loadFiles
                 Reload -> loadFiles
                 Eval t -> do
-                    -- TODO: Type checking here
-                    defs <- rsDefinitions <$> get
-                    case interpretTerm defs t of
+                    prog <- rsProgram <$> get
+                    case runTermCheck t prog of
                         Left e -> lift $ putStrLn $ show e
-                        Right v -> lift $ putStrLn $ prettyValue v
+                        Right _ ->
+                            case interpretTerm prog t of
+                                Left e -> lift $ putStrLn $ show e
+                                Right v -> lift $ putStrLn $ prettyValue v
                 Help -> lift printHelp
     repl
 
@@ -100,10 +103,13 @@ loadFiles = do
     case parseDefinitions source of
         Left e -> lift $ putStrLn $ show e
         Right (defs, table) -> do
-            -- TODO: add type checker call here
-            setDefinitions defs
-            setTable table
-            lift $ messagebox $ ["Successfylly loaded files "] ++ files
+            let c = checkProgram defs
+            case c of
+                Left e -> lift $ putStrLn $ show e
+                Right prog -> do
+                    setProgram prog
+                    setTable table
+                    lift $ messagebox $ ["Successfylly loaded files "] ++ files
 
 -- ==== util ==== --
 

@@ -40,39 +40,8 @@ instance Monad Runtime where
 abort :: RuntimeError -> Runtime a
 abort re = Runtime (const (Left re))
 
-interpretTerm :: [Definition] -> Term -> Either RuntimeError Value
-interpretTerm ds t = run (eval t) (defListToProgram ds)
-
-defListToProgram :: [Definition] -> Program
-defListToProgram [] = emptyProgram
-defListToProgram ((DataDef d typeVars constructors) : ds) =
-    addDataDef (defListToProgram ds) constructors
-  where
-    addDataDef :: Program -> [(C, [Type])] -> Program
-    addDataDef prog [] = prog
-    addDataDef prog ((c, ts) : cs) =
-        addDataDef
-            ( prog
-                { delta = \y ->
-                    if c == y
-                        then Just (d, typeVars, ts)
-                        else delta prog y
-                }
-            )
-            cs
-defListToProgram ((VarDef x ty term) : ds) = addVar $ defListToProgram ds
-  where
-    addVar :: Program -> Program
-    addVar prog =
-        prog
-            { gamma = \y ->
-                if x == y
-                    then Just (ty, term)
-                    else gamma prog y
-            }
-
-emptyProgram :: Program
-emptyProgram = Program (const Nothing) (const Nothing)
+interpretTerm :: Program -> Term -> Either RuntimeError Value
+interpretTerm p t = run (eval t) p
 
 mgu :: Pattern -> Value -> Maybe Substitution
 mgu (VarPat x) v = Just $ substitute x (toTerm v)
