@@ -5,6 +5,8 @@ module Main (main) where
 import Control.Monad (forM)
 import Control.Monad.State
 import Data.List (intercalate)
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Editor
 import Interpreter
 import Parser
@@ -14,18 +16,17 @@ import System.IO
 import TypeChecker
 
 data ReplState = ReplState
-    { rsFiles :: [FilePath]
+    { rsFiles :: Set FilePath
     , rsOpTable :: OpTable
     , rsProgram :: Program
     }
 
 type ReplM = StateT ReplState IO
 
--- TODO: Make the files a list, or check that the new file is not in there.
 addFile :: FilePath -> ReplM ()
 addFile f = do
     files <- rsFiles <$> get
-    modify' $ \st -> st{rsFiles = f : files}
+    modify' $ \st -> st{rsFiles = Set.insert f files}
 
 setTable :: OpTable -> ReplM ()
 setTable t = modify' $ \st -> st{rsOpTable = t}
@@ -55,7 +56,7 @@ main =
         evalStateT
             repl
             ReplState
-                { rsFiles = []
+                { rsFiles = Set.empty
                 , rsOpTable = emptyOpTable
                 , rsProgram = Program (const Nothing) (const Nothing)
                 }
@@ -97,7 +98,7 @@ printHelp =
 
 loadFiles :: ReplM ()
 loadFiles = do
-    files <- rsFiles <$> get
+    files <- Set.toList <$> rsFiles <$> get
     sources <- lift $ forM files readFile
     let source = intercalate "\n" sources
     case parseDefinitions source of
