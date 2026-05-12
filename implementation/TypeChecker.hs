@@ -3,7 +3,6 @@
 module TypeChecker (Analysis, checkProgram, checkTerm, runTermCheck) where
 
 import Control.Monad (ap, liftM)
-import Data.Foldable (for_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Debug.Trace (traceM)
@@ -69,6 +68,7 @@ isType t1 t2 = Analysis $ \(_, _) -> Right ([t1 :==: t2], ())
 throwError :: TypeError -> Analysis a
 throwError e = Analysis $ \(_, _) -> Left e
 
+-- TODO
 newTypeVar :: Analysis Type
 newTypeVar = do
     traceM "newTypeVar is undefined"
@@ -94,7 +94,9 @@ checkTerm (Constructor c terms) = do
     checkTerms [] [] = return ()
     checkTerms [] _ = throwError $ "Too few arguments to constructor " ++ c
     checkTerms _ [] = throwError $ "Too many arguments to constructor " ++ c
-    checkTerms (type1 : type1s) (type2 : type2s) = (type1 `isType` type2) >>= const (checkTerms type1s type2s)
+    checkTerms (type1 : type1s) (type2 : type2s) =
+        type1 `isType` type2
+            >>= const (checkTerms type1s type2s)
 checkTerm (Application t0 t1) = do
     type0 <- checkTerm t0
     type1 <- checkTerm t1
@@ -125,14 +127,39 @@ runTermCheck term prog =
     runCheck (checkTerm term) (prog, emptyEnvironment)
         >> return ()
 
+checkDefinitions :: [Definition] -> Analysis ()
+checkDefinitions [] = return ()
+checkDefinitions ((DataDef _ _ _) : ds) = checkDefinitions ds
+checkDefinitions ((VarDef _ type' term) : ds) = do
+    checkVarDef type' term
+    checkDefinitions ds
+
+checkVarDef :: Type -> Term -> Analysis ()
+checkVarDef type' term = do
+    t <- checkTerm term
+    type' `isType` t
+
 checkProgram :: [Definition] -> Either TypeError Program
-checkProgram [] = return $ Program (const Nothing) (const Nothing)
-checkProgram ((DataDef d typeVars constructors) : ds) = do
-    p <- checkProgram ds
-    addDataDef p constructors
+checkProgram ds = do
+    -- TODO: Could I use an empty program here?
+    let p = buildProgram ds
+    (cs, _) <- runCheck (checkDefinitions ds) (p, emptyEnvironment)
+    sub <- solve cs
+    Right $ buildProgram $ substitute sub ds
+
+substitute :: Substitution -> [Definition] -> [Definition]
+substitute _ [] = []
+substitute sub (d@(DataDef _ _ _) : ds) = d : substitute sub ds
+substitute sub ((VarDef x type' term) : ds) =
+    (VarDef x (Map.findWithDefault type' x sub) term) : substitute sub ds
+
+buildProgram :: [Definition] -> Program
+buildProgram [] = Program (const Nothing) (const Nothing)
+buildProgram ((DataDef d typeVars constructors) : ds) =
+    addDataDef (buildProgram ds) constructors
   where
-    addDataDef :: Program -> [(C, [Type])] -> Either TypeError Program
-    addDataDef prog [] = return prog
+    addDataDef :: Program -> [(C, [Type])] -> Program
+    addDataDef prog [] = prog
     addDataDef prog ((c, ts) : cs) =
         addDataDef
             ( prog
@@ -143,19 +170,19 @@ checkProgram ((DataDef d typeVars constructors) : ds) = do
                 }
             )
             cs
-checkProgram ((VarDef x ty term) : ds) = checkProgram ds >>= addVar
+buildProgram ((VarDef x ty term) : ds) = addVar $ buildProgram ds
   where
-    addVar :: Program -> Either TypeError Program
+    addVar :: Program -> Program
     addVar prog =
-        return $
-            prog
-                { gamma = \y ->
-                    if x == y
-                        then Just (ty, term)
-                        else gamma prog y
-                }
+        prog
+            { gamma = \y ->
+                if x == y
+                    then Just (ty, term)
+                    else gamma prog y
+            }
 
+-- TODO
 solve :: [Constraint] -> Either TypeError Substitution
 solve _ = do
-    traceM "Constraint solving is not implemented"
+    traceM "Constraint solving is undefined"
     Right Map.empty
