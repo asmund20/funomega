@@ -5,6 +5,7 @@ module TypeChecker (Analysis, checkProgram, checkTerm, runTermCheck) where
 import Control.Monad (ap, liftM)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Traversable (forM)
 import Debug.Trace (traceM)
 import Syntax
 
@@ -83,10 +84,12 @@ checkTerm (Constructor c terms) = do
     case delta prog c of
         Nothing -> throwError $ "Undefined constructor " ++ c
         Just (d, xs, types) -> do
+            newTypeVars <- forM xs (const newTypeVar)
+            let sub = Map.fromList $ zip xs newTypeVars
             receivedTypes <- mapM checkTerm terms
-            checkTerms receivedTypes types
+            checkTerms receivedTypes (map (substituteType sub) types)
 
-            return $ Prim d receivedTypes
+            return $ Prim d newTypeVars
   where
     checkTerms :: [Type] -> [Type] -> Analysis ()
     checkTerms [] [] = return ()
@@ -101,6 +104,7 @@ checkTerm (Application t0 t1) = do
     typeVar <- newTypeVar
     type1 :->: typeVar `isType` type0
     return type0
+-- TODO: This seems to not work
 checkTerm (Case t cases) = do
     type' <- checkTerm t
     typeCases <- checkCase type' cases
@@ -216,12 +220,13 @@ resolveConstraints (c@(t1 :==: t2) : cs)
     substituteConstraints _ [] = []
     substituteConstraints sub ((type1 :==: type2) : cs') =
         substituteType sub type1 :==: substituteType sub type2 : cs'
-    substituteType :: Substitution -> Type -> Type
-    substituteType sub t@(TypeVar x) = Map.findWithDefault t x sub
-    substituteType sub (type1 :->: type2) =
-        substituteType sub type1 :->: substituteType sub type2
-    substituteType sub (Prim d ts) = Prim d (map (substituteType sub) ts)
     occursIn :: X -> Type -> Bool
     occursIn x (TypeVar y) = y == x
     occursIn x (tau1 :->: tau2) = x `occursIn` tau1 || x `occursIn` tau2
     occursIn x (Prim _ ts) = any (x `occursIn`) ts
+
+substituteType :: Substitution -> Type -> Type
+substituteType sub t@(TypeVar x) = Map.findWithDefault t x sub
+substituteType sub (type1 :->: type2) =
+    substituteType sub type1 :->: substituteType sub type2
+substituteType sub (Prim d ts) = Prim d (map (substituteType sub) ts)
