@@ -52,8 +52,8 @@ getProgram = Analysis $ \(prog, _, i) -> Right ([], i, prog)
 getEnvironment :: Analysis Environment
 getEnvironment = Analysis $ \(_, env, i) -> Right ([], i, env)
 
-localEnv :: X -> Type -> Analysis a -> Analysis a
-localEnv x t (Analysis m) = Analysis $ \(prog, env, i) -> m (prog, Map.insert x t env, i)
+localEnv :: Environment -> Analysis a -> Analysis a
+localEnv envExtension (Analysis m) = Analysis $ \(prog, env, i) -> m (prog, Map.union envExtension env, i)
 
 isType :: Type -> Type -> Analysis ()
 isType t1 t2 = Analysis $ \(_, _, i) -> Right ([t1 :==: t2], i, ())
@@ -66,10 +66,13 @@ newTypeVar = Analysis $ \(_, _, i) -> Right ([], i + 1, TypeVar $ show i)
 
 checkTerm :: Term -> Analysis Type
 checkTerm (Variable x) = do
+    prog <- getProgram
     env <- getEnvironment
-    case Map.lookup x env of
-        Nothing -> newTypeVar
-        Just t -> return t
+    case gamma prog x of
+        Nothing -> case Map.lookup x env of
+            Nothing -> throwError $ "Undefined variable " ++ x
+            Just t -> return t
+        Just (t, _) -> return t
 checkTerm (Constructor c terms) = do
     prog <- getProgram
     case delta prog c of
@@ -87,32 +90,64 @@ checkTerm (Constructor c terms) = do
     checkTerms [] _ = throwError $ "Too few arguments to constructor " ++ c
     checkTerms _ [] = throwError $ "Too many arguments to constructor " ++ c
     checkTerms (type1 : type1s) (type2 : type2s) =
-        type1 `isType` type2
-            >>= const (checkTerms type1s type2s)
+        do
+            traceM $
+                "Checking constructor arguments: " ++ show type1 ++ " isType " ++ show type2
+            type1 `isType` type2
+            checkTerms type1s type2s
+-- type1 `isType` type2
+--     >>= const (checkTerms type1s type2s)
 checkTerm (Application t0 t1) = do
     type0 <- checkTerm t0
     type1 <- checkTerm t1
     typeVar <- newTypeVar
+    traceM $
+        "Checking application: "
+            ++ show (type1 :->: typeVar)
+            ++ " isType "
+            ++ show type0
     type1 :->: typeVar `isType` type0
-    return type0
--- TODO: This seems to not work
+    return typeVar
 checkTerm (Case t cases) = do
     type' <- checkTerm t
     typeCases <- checkCase type' cases
     return typeCases
   where
     checkCase :: Type -> [(Pattern, Term)] -> Analysis Type
-    checkCase _ [] = newTypeVar
+    checkCase _ [] = throwError $ "Empty case term"
+    checkCase type' [(pat, term)] = do
+        env <- bindVars pat
+        patternType <- localEnv env $ checkTerm $ toTerm pat
+        traceM $
+            "Checking final case (only pattern): "
+                ++ show type'
+                ++ " isType "
+                ++ show patternType
+        type' `isType` patternType
+        termType <- localEnv env $ checkTerm term
+        return termType
     checkCase type' ((pat, term) : rest) = do
         patternType <- checkTerm $ toTerm pat
+        traceM $
+            "Checking case (pattern): " ++ show type' ++ " isType " ++ show patternType
         type' `isType` patternType
         restType <- checkCase type' rest
         termType <- checkTerm term
+        traceM $
+            "Checking case (same type as others): "
+                ++ show restType
+                ++ " isType "
+                ++ show termType
         restType `isType` termType
         return termType
+    bindVars :: Pattern -> Analysis Environment
+    bindVars (VarPat x) = Map.singleton x <$> newTypeVar
+    bindVars (ConPat _ pats) = do
+        envs <- mapM bindVars pats
+        return $ foldl Map.union Map.empty envs
 checkTerm (Function x t) = do
     typeVar <- newTypeVar
-    retT <- localEnv x typeVar $ checkTerm t
+    retT <- localEnv (Map.singleton x typeVar) $ checkTerm t
     return $ typeVar :->: retT
 
 runTermCheck :: Term -> Program -> Either TypeError ()
@@ -120,23 +155,35 @@ runTermCheck term prog =
     runCheck (checkTerm term) (prog, Map.empty, 0)
         >> return ()
 
-checkDefinitions :: [Definition] -> Analysis ()
-checkDefinitions [] = return ()
-checkDefinitions ((DataDef _ _ _) : ds) = checkDefinitions ds
-checkDefinitions ((VarDef _ type' term) : ds) = do
-    checkVarDef type' term
-    checkDefinitions ds
+checkDefinitions :: Environment -> [Definition] -> Analysis ()
+checkDefinitions _ [] = return ()
+-- TODO: Check that all the used type variables are declared.
+checkDefinitions env ((DataDef _ _ _) : ds) = checkDefinitions env ds
+-- TODO: Make a Analysis that permanently adds to environment
+checkDefinitions env ((VarDef x type' term) : ds) = do
+    let newEnv = Map.insert x type' env
+    traceM $ "Checking type for " ++ x ++ ": " ++ show type' ++ " = " ++ show term
+    localEnv newEnv $ checkVarDef type' term
+    traceM "\n\n\n"
+    checkDefinitions newEnv ds
 
 checkVarDef :: Type -> Term -> Analysis ()
 checkVarDef type' term = do
     t <- checkTerm term
+    traceM $
+        "Checking var def for "
+            ++ show term
+            ++ " (declared type and inferred type): "
+            ++ show type'
+            ++ " isType "
+            ++ show t
     type' `isType` t
 
 checkProgram :: [Definition] -> Either TypeError Program
 checkProgram ds = do
     -- TODO: Could I use an empty program here?
     let p = buildProgram ds
-    (cs, _, _) <- runCheck (checkDefinitions ds) (p, Map.empty, 0)
+    (cs, _, _) <- runCheck (checkDefinitions Map.empty ds) (p, Map.empty, 0)
     traceM $ show cs
     sub <- solve cs
     Right $ buildProgram $ substitute sub ds
@@ -206,7 +253,11 @@ resolveConstraints (c@(t1 :==: t2) : cs)
             Left $ "Occurs check failed: " ++ x ++ " in " ++ show tau
         | otherwise = Right ([], Map.singleton x tau)
     resolveSingle (tau1 :==: tau2) =
-        Left $ "Type mismatch: " ++ show tau1 ++ " and " ++ show tau2
+        Left $
+            "Type mismatch between primitive and function: "
+                ++ show tau1
+                ++ " and "
+                ++ show tau2
     substituteConstraints :: Substitution -> [Constraint] -> [Constraint]
     substituteConstraints _ [] = []
     substituteConstraints sub ((type1 :==: type2) : cs') =
