@@ -29,15 +29,15 @@ instance Functor Analysis where
 
 instance Applicative Analysis where
     pure :: a -> Analysis a
-    pure x = Analysis $ \(_, _, i) -> (Right ([], i, x))
+    pure x = Analysis $ \(_, _, i) -> Right ([], i, x)
     (<*>) :: Analysis (a -> b) -> Analysis a -> Analysis b
     (<*>) = ap
 
 instance Monad Analysis where
     (>>=) :: Analysis a -> (a -> Analysis b) -> Analysis b
     a1 >>= a2 =
-        Analysis
-            ( \(prog, env, i) ->
+        Analysis $
+            \(prog, env, i) ->
                 let x1 = runCheck a1 (prog, env, i)
                     x2 = case x1 of
                         Left e -> Left e
@@ -45,7 +45,6 @@ instance Monad Analysis where
                             Left e -> Left e
                             Right (cs2, i'', x') -> Right (cs1 ++ cs2, i'', x')
                  in x2
-            )
 
 getProgram :: Analysis Program
 getProgram = Analysis $ \(prog, _, i) -> Right ([], i, prog)
@@ -65,14 +64,6 @@ throwError e = Analysis $ \(_, _, _) -> Left e
 newTypeVar :: Analysis Type
 newTypeVar = Analysis $ \(_, _, i) -> Right ([], i + 1, TypeVar $ show i)
 
--- newTypeVar :: Analysis Type
--- newTypeVar = do
---     i <- newVar
---     traceM $ "Generating new type var " ++ show i
---     return i
---   where
---     newVar = Analysis $ \(_, _, i) -> Right ([], i + 1, TypeVar $ show i)
-
 checkTerm :: Term -> Analysis Type
 checkTerm (Variable x) = do
     env <- getEnvironment
@@ -84,10 +75,10 @@ checkTerm (Constructor c terms) = do
     case delta prog c of
         Nothing -> throwError $ "Undefined constructor " ++ c
         Just (d, xs, types) -> do
-            newTypeVars <- forM xs (const newTypeVar)
+            newTypeVars <- forM xs $ const newTypeVar
             let sub = Map.fromList $ zip xs newTypeVars
             receivedTypes <- mapM checkTerm terms
-            checkTerms receivedTypes (map (substituteType sub) types)
+            checkTerms receivedTypes $ map (substituteType sub) types
 
             return $ Prim d newTypeVars
   where
@@ -121,7 +112,7 @@ checkTerm (Case t cases) = do
         return termType
 checkTerm (Function x t) = do
     typeVar <- newTypeVar
-    retT <- localEnv x typeVar (checkTerm t)
+    retT <- localEnv x typeVar $ checkTerm t
     return $ typeVar :->: retT
 
 runTermCheck :: Term -> Program -> Either TypeError ()
@@ -157,7 +148,7 @@ substitute sub ((VarDef x type' term) : ds) =
     (VarDef x (Map.findWithDefault type' x sub) term) : substitute sub ds
 
 buildProgram :: [Definition] -> Program
-buildProgram [] = Program (const Nothing) (const Nothing)
+buildProgram [] = Program (const Nothing) $ const Nothing
 buildProgram ((DataDef d typeVars constructors) : ds) =
     addDataDef (buildProgram ds) constructors
   where
@@ -196,7 +187,7 @@ resolveConstraints (c@(t1 :==: t2) : cs)
     | t1 == t2 = resolveConstraints cs
     | otherwise = do
         (cs', sub) <- resolveSingle c
-        resolveConstraints (cs' ++ substituteConstraints sub cs)
+        resolveConstraints $ cs' ++ substituteConstraints sub cs
   where
     resolveSingle :: Constraint -> Either TypeError ([Constraint], Substitution)
     resolveSingle ((tau1 :->: tau2) :==: (tau1' :->: tau2')) =
@@ -229,4 +220,4 @@ substituteType :: Substitution -> Type -> Type
 substituteType sub t@(TypeVar x) = Map.findWithDefault t x sub
 substituteType sub (type1 :->: type2) =
     substituteType sub type1 :->: substituteType sub type2
-substituteType sub (Prim d ts) = Prim d (map (substituteType sub) ts)
+substituteType sub (Prim d ts) = Prim d $ map (substituteType sub) ts
