@@ -3,6 +3,7 @@
 module TypeChecker (Analysis, checkProgram, checkTerm, runTermCheck) where
 
 import Control.Monad (ap, liftM)
+import Data.List (nubBy)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Traversable (forM)
@@ -151,14 +152,17 @@ checkTerm (Function x t) = do
     return $ typeVar :->: retT
 
 runTermCheck :: Term -> Program -> Either TypeError ()
-runTermCheck term prog =
-    runCheck (checkTerm term) (prog, Map.empty, 0)
-        >> return ()
+runTermCheck term prog = do
+    (cs, _, _) <- runCheck (checkTerm term) (prog, Map.empty, 0)
+    _ <- solve cs
+
+    return ()
 
 checkDefinitions :: Environment -> [Definition] -> Analysis ()
 checkDefinitions _ [] = return ()
 -- TODO: Check that all the used type variables are declared.
-checkDefinitions env ((DataDef _ _ _) : ds) = checkDefinitions env ds
+-- Also make sure the data def is unique
+checkDefinitions env ((DataDef d xs cons) : ds) = checkDefinitions env ds
 -- TODO: Make a Analysis that permanently adds to environment
 checkDefinitions env ((VarDef x type' term) : ds) = do
     let newEnv = Map.insert x type' env
@@ -180,13 +184,21 @@ checkVarDef type' term = do
     type' `isType` t
 
 checkProgram :: [Definition] -> Either TypeError Program
-checkProgram ds = do
-    -- TODO: Could I use an empty program here?
-    let p = buildProgram ds
-    (cs, _, _) <- runCheck (checkDefinitions Map.empty ds) (p, Map.empty, 0)
-    traceM $ show cs
-    sub <- solve cs
-    Right $ buildProgram $ substitute sub ds
+checkProgram ds =
+    if length ds == length (nubBy sameName ds)
+        then do
+            -- TODO: Could I use an empty program here?
+            let p = buildProgram ds
+            (cs, _, _) <- runCheck (checkDefinitions Map.empty ds) (p, Map.empty, 0)
+            traceM $ show cs
+            sub <- solve cs
+            Right $ buildProgram $ substitute sub ds
+        else Left "Found top-level definitions with the same name"
+  where
+    sameName :: Definition -> Definition -> Bool
+    sameName (DataDef d1 _ _) (DataDef d2 _ _) = d1 == d2
+    sameName (VarDef x1 _ _) (VarDef x2 _ _) = x1 == x2
+    sameName _ _ = False
 
 substitute :: Substitution -> [Definition] -> [Definition]
 substitute _ [] = []
