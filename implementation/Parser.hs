@@ -177,7 +177,10 @@ pattern = topLevel
 typeParser :: Parser Type
 typeParser = chainr1 typeLit typeArrow
   where
-    typeLit = (Prim <$> dataTypeName <*> many typeVar) <|> typeVar
+    typeLit =
+        (Prim <$> dataTypeName <*> many typeVar)
+            <|> typeVar
+            <|> (strings "(" *> typeParser <* strings ")")
     typeVar = TypeVar <$> variableName
     typeArrow = strings "->" >> return (:->:)
 
