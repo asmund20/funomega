@@ -206,19 +206,18 @@ checkVarDef type' term = do
 
 checkProgram :: [Definition] -> Either TypeError Program
 checkProgram ds =
-    let duplicates = sameName
-     in if null duplicates
-            then do
-                let p = buildProgram ds
-                (cs, _, _) <- runCheck (checkDefinitions Map.empty ds) (p, Map.empty, 0)
-                traceM $ show cs
-                sub <- solve cs
-                traceM $ show sub
-                Right $ buildProgram $ substitute sub ds
-            else do
-                Left $
-                    "Found top-level definitions with the same name. Multiple instances of "
-                        ++ intercalate ", " duplicates
+    if null sameName
+        then do
+            let p = buildProgram ds
+            (cs, _, _) <- runCheck (checkDefinitions Map.empty ds) (p, Map.empty, 0)
+            traceM $ show cs
+            sub <- solve cs
+            traceM $ show sub
+            Right $ buildProgram $ substitute sub ds
+        else do
+            Left $
+                "Found top-level definitions with the same name. Multiple instances of "
+                    ++ intercalate ", " sameName
   where
     sameName :: [Name]
     sameName =
