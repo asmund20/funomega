@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Main (main) where
+module Main (main, handleCommand, ErrorCase) where
 
 import Control.Monad (forM)
 import Control.Monad.State
@@ -23,6 +23,13 @@ data ReplState = ReplState
     }
 
 type ReplM = StateT ReplState IO
+
+data ErrorCase
+    = CommandParseError
+    | FileNotFoundError
+    | TypeCheckError
+    | RunTimeError
+    | ProgramParseError
 
 addFile :: FilePath -> ReplM Bool
 addFile f = do
@@ -71,29 +78,46 @@ main =
 repl :: ReplM ()
 repl = do
     x <- lift $ runLineEditor "funOmega> " $ takeInput >>= remember
+    _ <- handleCommand x
+    repl
+
+handleCommand :: String -> ReplM (Maybe ErrorCase)
+handleCommand x = do
     table <- rsOpTable <$> get
     case parseCommand table x of
-        Left e -> lift $ putStrLn $ show e
+        Left e -> do
+            lift $ putStrLn $ show e
+            return $ Just CommandParseError
         Right Quit -> lift exitSuccess
         Right c -> do
             case c of
                 Load f -> do
                     exists <- addFile f
                     if exists
-                        then loadFiles
-                        else
+                        then do
+                            loadFiles
+                        else do
                             lift $ putStrLn $ "Cannot find file " ++ f
-                Reload -> loadFiles
+                            return $ Just FileNotFoundError
+                Reload -> do
+                    loadFiles
                 Eval t -> do
                     prog <- rsProgram <$> get
                     case runTermCheck t prog of
-                        Left e -> lift $ putStrLn $ show e
+                        Left e -> do
+                            lift $ putStrLn $ show e
+                            return $ Just TypeCheckError
                         Right _ ->
                             case interpretTerm prog t of
-                                Left e -> lift $ putStrLn $ show e
-                                Right v -> lift $ putStrLn $ prettyValue v
-                Help -> lift printHelp
-    repl
+                                Left e -> do
+                                    lift $ putStrLn $ show e
+                                    return $ Just RunTimeError
+                                Right v -> do
+                                    lift $ putStrLn $ prettyValue v
+                                    return Nothing
+                Help -> do
+                    lift printHelp
+                    return Nothing
 
 printHelp :: IO ()
 printHelp =
@@ -106,22 +130,27 @@ printHelp =
         , "- :r ==> Reload the loaded funOmega files"
         ]
 
-loadFiles :: ReplM ()
+loadFiles :: ReplM (Maybe ErrorCase)
 loadFiles = do
     files <- Set.toList <$> rsFiles <$> get
     sources <- lift $ forM files readFile
     let source = intercalate "\n" sources
     case parseDefinitions source of
-        Left e -> lift $ putStrLn $ show e
+        Left e -> do
+            lift $ putStrLn $ show e
+            return $ Just ProgramParseError
         Right (defs, table) -> do
             let c = checkProgram defs
             case c of
-                Left e -> lift $ putStrLn $ show e
+                Left e -> do
+                    lift $ putStrLn $ show e
+                    return $ Just TypeCheckError
                 Right prog -> do
                     setProgram prog
                     setTable table
                     lift $ putStrLn $ show defs
                     lift $ messagebox $ ["Successfylly loaded files "] ++ files
+                    return Nothing
 
 -- ==== util ==== --
 
