@@ -180,8 +180,11 @@ checkDefinitions env ((DataDef d xs cons) : ds) = do
                         ++ x
                         ++ " in data definition "
                         ++ d
-    -- TODO: make sure the data def exists. Should make current fib fail
-    checkType (Prim _ ts) = forM_ ts checkType
+    checkType (Prim d' ts) = do
+        prog <- getProgram
+        if datas prog d'
+            then forM_ ts checkType
+            else throwError $ "Undefined data: " ++ d'
     checkType (t0 :->: t1) = do
         checkType t0
         checkType t1
