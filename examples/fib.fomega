@@ -14,6 +14,21 @@ fib : Nat -> Nat = fun n -> case n of
     ; (S (S num)) -> fib (S num) + fib num .
 
 
+n0 : Nat = Z .
+n1 : Nat = S n0 .
+n2 : Nat = S n1 .
+n3 : Nat = S n2 .
+n4 : Nat = S n3 .
+n5 : Nat = S n4 .
+n6 : Nat = S n5 .
+n7 : Nat = S n6 .
+n8 : Nat = S n7 .
+n9 : Nat = S n8 .
+n10 : Nat = S n9 .
+n11 : Nat = S n10 .
+n12 : Nat  = S n11 .
+
+
 fib0 : Nat = fib Z .
 fib1 : Nat = fib (S Z) .
 fib2 : Nat = fib (S (S Z)) .
