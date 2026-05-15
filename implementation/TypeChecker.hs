@@ -100,8 +100,6 @@ checkTerm (Constructor c terms) = do
                 "Checking constructor arguments: " ++ show type1 ++ " isType " ++ show type2
             type1 `isType` type2
             checkTerms type1s type2s
--- type1 `isType` type2
---     >>= const (checkTerms type1s type2s)
 checkTerm (Application t0 t1) = do
     type0 <- checkTerm t0
     type1 <- checkTerm t1

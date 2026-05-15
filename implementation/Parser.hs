@@ -1,6 +1,4 @@
--- Justify your changes in the report.
-
-module Parser (parseDefinitions, parseInfixes, parseCommand, parseTerm) where
+module Parser (parseDefinitions, parseInfixes, parseCommand) where
 
 import Data.Char (isAlphaNum, isControl, isSpace)
 import Data.Foldable (Foldable (toList))
@@ -53,10 +51,6 @@ command term =
     help = strings "?" >> return Help
     quit :: Parser Command
     quit = strings "q" >> return Quit
-
--- TODO: Probably delete this
-parseTerm :: OpTable -> String -> Either ParseError Term
-parseTerm table = parse (makeTermParser table <* eof) "term"
 
 parseDefinitions ::
     String -> Either ParseError ([Definition], OpTable)
