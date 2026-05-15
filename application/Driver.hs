@@ -11,6 +11,7 @@ import Editor
 import Interpreter
 import Parser
 import Syntax
+import System.Directory (doesFileExist)
 import System.Exit (exitSuccess)
 import System.IO
 import TypeChecker
@@ -23,10 +24,16 @@ data ReplState = ReplState
 
 type ReplM = StateT ReplState IO
 
-addFile :: FilePath -> ReplM ()
+addFile :: FilePath -> ReplM Bool
 addFile f = do
-    files <- rsFiles <$> get
-    modify' $ \st -> st{rsFiles = Set.insert f files}
+    exists <- lift $ doesFileExist f
+    if exists
+        then do
+            files <- rsFiles <$> get
+            modify' $ \st -> st{rsFiles = Set.insert f files}
+            return True
+        else do
+            return False
 
 setTable :: OpTable -> ReplM ()
 setTable t = modify' $ \st -> st{rsOpTable = t}
@@ -58,7 +65,7 @@ main =
             ReplState
                 { rsFiles = Set.empty
                 , rsOpTable = emptyOpTable
-                , rsProgram = Program (const Nothing) (const Nothing)
+                , rsProgram = Program (const Nothing) (const Nothing) (const False)
                 }
 
 repl :: ReplM ()
@@ -71,8 +78,11 @@ repl = do
         Right c -> do
             case c of
                 Load f -> do
-                    addFile f
-                    loadFiles
+                    exists <- addFile f
+                    if exists
+                        then loadFiles
+                        else
+                            lift $ putStrLn $ "Cannot find file " ++ f
                 Reload -> loadFiles
                 Eval t -> do
                     prog <- rsProgram <$> get
@@ -110,6 +120,7 @@ loadFiles = do
                 Right prog -> do
                     setProgram prog
                     setTable table
+                    lift $ putStrLn $ show defs
                     lift $ messagebox $ ["Successfylly loaded files "] ++ files
 
 -- ==== util ==== --

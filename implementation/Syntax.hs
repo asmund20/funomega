@@ -69,6 +69,7 @@ data Program
     = Program
     { gamma :: X -> Maybe (Type, Term)
     , delta :: C -> Maybe (D, [X], [Type])
+    , datas :: D -> Bool
     }
 
 -- note that patterns and values are a subset of term, so you can have:

@@ -1,8 +1,9 @@
 {-# LANGUAGE InstanceSigs #-}
 
-module TypeChecker (Analysis, checkProgram, checkTerm, runTermCheck) where
+module TypeChecker (Analysis, checkProgram, runTermCheck) where
 
 import Control.Monad (ap, liftM)
+import Data.Foldable (forM_)
 import Data.List (nubBy)
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -160,10 +161,27 @@ runTermCheck term prog = do
 
 checkDefinitions :: Environment -> [Definition] -> Analysis ()
 checkDefinitions _ [] = return ()
--- TODO: Check that all the used type variables are declared.
--- Also make sure the data def is unique
-checkDefinitions env ((DataDef d xs cons) : ds) = checkDefinitions env ds
--- TODO: Make a Analysis that permanently adds to environment
+checkDefinitions env ((DataDef d xs cons) : ds) = do
+    forM_ cons checkCons
+    checkDefinitions env ds
+  where
+    checkCons :: (C, [Type]) -> Analysis ()
+    checkCons (_, ts) = forM_ ts checkType
+    checkType :: Type -> Analysis ()
+    checkType (TypeVar x) =
+        if x `elem` xs
+            then return ()
+            else
+                throwError $
+                    "Undefined type variable "
+                        ++ x
+                        ++ " in data definition "
+                        ++ d
+    -- TODO: make sure the data def exists. Should make current fib fail
+    checkType (Prim _ ts) = forM_ ts checkType
+    checkType (t0 :->: t1) = do
+        checkType t0
+        checkType t1
 checkDefinitions env ((VarDef x type' term) : ds) = do
     let newEnv = Map.insert x type' env
     traceM $ "Checking type for " ++ x ++ ": " ++ show type' ++ " = " ++ show term
@@ -183,15 +201,16 @@ checkVarDef type' term = do
             ++ show t
     type' `isType` t
 
+-- TODO: Check that the constructors are not duplicate too
 checkProgram :: [Definition] -> Either TypeError Program
 checkProgram ds =
     if length ds == length (nubBy sameName ds)
         then do
-            -- TODO: Could I use an empty program here?
             let p = buildProgram ds
             (cs, _, _) <- runCheck (checkDefinitions Map.empty ds) (p, Map.empty, 0)
             traceM $ show cs
             sub <- solve cs
+            traceM $ show sub
             Right $ buildProgram $ substitute sub ds
         else Left "Found top-level definitions with the same name"
   where
@@ -207,14 +226,18 @@ substitute sub ((VarDef x type' term) : ds) =
     (VarDef x (Map.findWithDefault type' x sub) term) : substitute sub ds
 
 buildProgram :: [Definition] -> Program
-buildProgram [] = Program (const Nothing) $ const Nothing
+buildProgram [] = Program (const Nothing) (const Nothing) $ const False
 buildProgram ((DataDef d typeVars constructors) : ds) =
-    addDataDef (buildProgram ds) constructors
+    let prog = addConstructors (buildProgram ds) constructors
+     in prog
+            { datas = \y ->
+                if y == d then True else datas prog y
+            }
   where
-    addDataDef :: Program -> [(C, [Type])] -> Program
-    addDataDef prog [] = prog
-    addDataDef prog ((c, ts) : cs) =
-        addDataDef
+    addConstructors :: Program -> [(C, [Type])] -> Program
+    addConstructors prog [] = prog
+    addConstructors prog ((c, ts) : cs) =
+        addConstructors
             ( prog
                 { delta = \y ->
                     if c == y
@@ -235,49 +258,76 @@ buildProgram ((VarDef x ty term) : ds) = addVar $ buildProgram ds
             }
 
 solve :: [Constraint] -> Either TypeError Substitution
-solve cs = do
-    (_, sub) <- resolveConstraints cs
-    return sub
+solve constraints = do
+    (_, solvedCs, sub) <- solve' constraints
+    traceM $ "Solved constraints, result is:\n" ++ show solvedCs
 
-resolveConstraints ::
-    [Constraint] -> Either TypeError ([Constraint], Substitution)
-resolveConstraints [] = Right ([], Map.empty)
-resolveConstraints (c@(t1 :==: t2) : cs)
-    | t1 == t2 = resolveConstraints cs
-    | otherwise = do
-        (cs', sub) <- resolveSingle c
-        resolveConstraints $ cs' ++ substituteConstraints sub cs
+    return sub
   where
-    resolveSingle :: Constraint -> Either TypeError ([Constraint], Substitution)
+    solve' ::
+        [Constraint] -> Either TypeError ([Constraint], [Constraint], Substitution)
+    solve' [] = Right ([], [], Map.empty)
+    solve' (c@(t1 :==: t2) : cs)
+        | t1 == t2 = solve' cs
+        | otherwise = do
+            (cs', con, sub) <- resolveSingle c
+            traceM $ "Got substitution " ++ show sub
+            let subbed = cs' ++ substituteConstraints sub cs
+            traceM $ "After substitution, constraints are " ++ show subbed
+            (cs'', cons, sub') <- solve' $ cs' ++ subbed
+            let sub'' = Map.union sub sub'
+            return
+                ( cs''
+                , substituteConstraints sub'' $ con `appendIfJust` cons
+                , sub''
+                )
+    appendIfJust :: Maybe a -> [a] -> [a]
+    appendIfJust ma as = case ma of
+        Nothing -> as
+        Just a -> a : as
+    resolveSingle ::
+        Constraint -> Either TypeError ([Constraint], Maybe Constraint, Substitution)
     resolveSingle ((tau1 :->: tau2) :==: (tau1' :->: tau2')) =
-        Right ([tau1 :==: tau1', tau2 :==: tau2'], Map.empty)
+        Right ([tau1 :==: tau1', tau2 :==: tau2'], Nothing, Map.empty)
     resolveSingle (tau1@(Prim d ts) :==: tau2@(Prim d' ts'))
         | d == d' && length ts == length ts' =
-            Right (map (\(tau, tau') -> tau :==: tau') (zip ts ts'), Map.empty)
+            Right
+                ( map (\(tau, tau') -> tau :==: tau') (zip ts ts')
+                , Nothing
+                , Map.empty
+                )
         | otherwise =
             Left $ "Primitive type mismatch: " ++ show tau1 ++ " and " ++ show tau2
     resolveSingle ((TypeVar x) :==: tau')
         | x `occursIn` tau' =
             Left $ "Occurs check failed: " ++ x ++ " in " ++ show tau'
-        | otherwise = Right ([], Map.singleton x tau')
+        | otherwise = do
+            traceM $ "Solved " ++ x ++ ", it is: " ++ show tau'
+            Right ([], Just $ TypeVar x :==: tau', Map.singleton x tau')
     resolveSingle (tau :==: (TypeVar x))
         | x `occursIn` tau =
             Left $ "Occurs check failed: " ++ x ++ " in " ++ show tau
-        | otherwise = Right ([], Map.singleton x tau)
+        | otherwise = do
+            traceM $ "Solved " ++ x ++ ", it is: " ++ show tau
+            Right ([], Just $ TypeVar x :==: tau, Map.singleton x tau)
     resolveSingle (tau1 :==: tau2) =
         Left $
             "Type mismatch between primitive and function: "
                 ++ show tau1
                 ++ " and "
                 ++ show tau2
-    substituteConstraints :: Substitution -> [Constraint] -> [Constraint]
-    substituteConstraints _ [] = []
-    substituteConstraints sub ((type1 :==: type2) : cs') =
-        substituteType sub type1 :==: substituteType sub type2 : cs'
     occursIn :: X -> Type -> Bool
     occursIn x (TypeVar y) = y == x
     occursIn x (tau1 :->: tau2) = x `occursIn` tau1 || x `occursIn` tau2
     occursIn x (Prim _ ts) = any (x `occursIn`) ts
+
+substituteConstraints :: Substitution -> [Constraint] -> [Constraint]
+substituteConstraints sub cs =
+    map
+        ( \(type1 :==: type2) ->
+            substituteType sub type1 :==: substituteType sub type2
+        )
+        cs
 
 substituteType :: Substitution -> Type -> Type
 substituteType sub t@(TypeVar x) = Map.findWithDefault t x sub
