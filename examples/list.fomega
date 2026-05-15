@@ -1,0 +1,5 @@
+data Bool = | True | False .
+
+data List a = | Nil | Append a (List a) .
+
+infixr 0 x :: xs = Append x xs .
