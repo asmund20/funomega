@@ -4,9 +4,12 @@ module TypeChecker (Analysis, checkProgram, runTermCheck) where
 
 import Control.Monad (ap, liftM)
 import Data.Foldable (forM_)
-import Data.List (nubBy)
+import Data.List (intercalate, sort)
+import Data.List.NonEmpty (NonEmpty ((:|)))
+import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (catMaybes)
 import Data.Traversable (forM)
 import Debug.Trace (traceM)
 import Syntax
@@ -201,23 +204,38 @@ checkVarDef type' term = do
             ++ show t
     type' `isType` t
 
--- TODO: Check that the constructors are not duplicate too
 checkProgram :: [Definition] -> Either TypeError Program
 checkProgram ds =
-    if length ds == length (nubBy sameName ds)
-        then do
-            let p = buildProgram ds
-            (cs, _, _) <- runCheck (checkDefinitions Map.empty ds) (p, Map.empty, 0)
-            traceM $ show cs
-            sub <- solve cs
-            traceM $ show sub
-            Right $ buildProgram $ substitute sub ds
-        else Left "Found top-level definitions with the same name"
+    let duplicates = sameName
+     in if null duplicates
+            then do
+                let p = buildProgram ds
+                (cs, _, _) <- runCheck (checkDefinitions Map.empty ds) (p, Map.empty, 0)
+                traceM $ show cs
+                sub <- solve cs
+                traceM $ show sub
+                Right $ buildProgram $ substitute sub ds
+            else do
+                Left $
+                    "Found top-level definitions with the same name. Multiple instances of "
+                        ++ intercalate ", " duplicates
   where
-    sameName :: Definition -> Definition -> Bool
-    sameName (DataDef d1 _ _) (DataDef d2 _ _) = d1 == d2
-    sameName (VarDef x1 _ _) (VarDef x2 _ _) = x1 == x2
-    sameName _ _ = False
+    sameName :: [Name]
+    sameName =
+        let constructorNames = concatMap getConstructorNames ds
+            defNames = map getName ds
+            groupedNames = NonEmpty.group $ sort $ constructorNames ++ defNames
+            duplicates = catMaybes $ map longerThanOne groupedNames
+         in map NonEmpty.head duplicates
+    getName :: Definition -> Name
+    getName (VarDef x _ _) = x
+    getName (DataDef d _ _) = d
+    getConstructorNames :: Definition -> [Name]
+    getConstructorNames (VarDef _ _ _) = []
+    getConstructorNames (DataDef _ _ cs) = map (\(c, _) -> c) cs
+    longerThanOne :: NonEmpty a -> Maybe (NonEmpty a)
+    longerThanOne (_ :| []) = Nothing
+    longerThanOne l = Just l
 
 substitute :: Substitution -> [Definition] -> [Definition]
 substitute _ [] = []
