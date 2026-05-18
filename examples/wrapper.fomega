@@ -1,0 +1,3 @@
+data Pair a = | P a a .
+
+data Bool = | True | False .

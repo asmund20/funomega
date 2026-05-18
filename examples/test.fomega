@@ -1,0 +1,5 @@
+data Test = | A | B | C .
+
+y : Test = C .
+
+t : Test = (fun f -> (fun y -> f A) B) (fun x -> y) .

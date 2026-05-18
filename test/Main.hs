@@ -1,4 +1,12 @@
 module Main (main) where
 
+import Test.Tasty
+
+import ParserTests
+
 main :: IO ()
-main = putStrLn "Test suite not yet implemented."
+main =
+    defaultMain $
+        localOption (mkTimeout 30000000) $
+            testGroup "Test Suite:" $
+                [testParser]

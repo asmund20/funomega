@@ -33,8 +33,10 @@ test-suite funOmega-test
     type:             exitcode-stdio-1.0
     hs-source-dirs:   test
     main-is:          Main.hs
+    other-modules:    Fib, ParserTests
     build-depends:
-        base
+        QuickCheck ^>=2.18.0.0
+      , base
       , funOmega
       , tasty
       , tasty-hunit

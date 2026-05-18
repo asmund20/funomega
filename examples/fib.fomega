@@ -27,6 +27,9 @@ n9 : Nat = S n8 .
 n10 : Nat = S n9 .
 n11 : Nat = S n10 .
 n12 : Nat  = S n11 .
+n13 : Nat = S n12 .
+n14 : Nat = S n13 .
+n15 : Nat  = S n14 .
 
 
 fib0 : Nat = fib Z .

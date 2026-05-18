@@ -1,0 +1,56 @@
+data Nat = 
+    | Z
+    | S Nat .
+
+data Bool =
+    | True
+    | False .
+
+data List a = | Nil | Cons a (List a) .
+
+infixr 0 h :: tail = Cons h tail .
+
+infixl 2 n1 + n2 = plus n1 n2 .
+
+infixl 2 n1 - n2 = case n2 of
+    ; Z -> n1
+    ; S nn2 -> case n1 of
+        ; Z -> Z
+        ; S nn1 -> nn1 - nn2 .
+
+infixl 1 n1 * n2 = case n1 of
+    ; Z -> Z
+    ; S n -> n2 + n * n1 .
+
+plus: Nat -> Nat -> Nat = fun n1 -> fun n2 -> case n1 of
+    ; Z -> n2
+    ; S n -> n + (S n2) .
+
+plusTen : Nat -> Nat = plus n10 .
+
+double : Nat -> Nat = fun n1 -> n1 * n2 .
+
+infix 3 n1 == n2 = case n1 of
+    ; Z -> (case n2 of
+        ; Z -> True
+        ; x -> False)
+    ; S nn1 -> (case n2 of
+        ; Z -> False
+        ; S nn2 -> nn1 == nn2) .
+
+n0 : Nat = Z .
+n1 : Nat = S n0 .
+n2 : Nat = S n1 .
+n3 : Nat = S n2 .
+n4 : Nat = S n3 .
+n5 : Nat = S n4 .
+n6 : Nat = S n5 .
+n7 : Nat = S n6 .
+n8 : Nat = S n7 .
+n9 : Nat = S n8 .
+n10 : Nat = S n9 .
+n11 : Nat = S n10 .
+n12 : Nat  = S n11 .
+n13 : Nat = S n12 .
+n14 : Nat = S n13 .
+n15 : Nat  = S n14 .
