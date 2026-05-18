@@ -70,7 +70,7 @@ definition term = dataDef <|> binOpDef <|> varDef
   where
     dataDef :: Parser Definition
     dataDef = do
-        _ <- strings "data"
+        _ <- try $ strings "data"
         dataName <- dataTypeName
         vars <- many variableName
         _ <- strings "="
@@ -184,7 +184,8 @@ strings :: String -> Parser String
 strings s = string s <* spaces
 
 fixity :: Parser Fixity
-fixity = string "infix" >> (parseInfix <|> parseInfixL <|> parseInfixR) <* spaces
+fixity =
+    try $ string "infix" >> (parseInfix <|> parseInfixL <|> parseInfixR) <* spaces
   where
     parseInfix = space >> return Syntax.Infix
     parseInfixL = char 'l' >> space >> return InfixL
@@ -262,7 +263,7 @@ parseInfixes s = do
     second (_, v) = v
 
     infixity :: Parser [(Fixity, Prec, Op)]
-    infixity = catMaybes <$> many1 (binOpDef <|> otherDef)
+    infixity = catMaybes <$> many (binOpDef <|> otherDef)
 
     binOpDef :: Parser (Maybe (Fixity, Prec, Op))
     binOpDef =

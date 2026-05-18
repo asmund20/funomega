@@ -81,13 +81,13 @@ repl = do
     _ <- handleCommand x
     repl
 
-handleCommand :: String -> ReplM (Maybe ErrorCase)
+handleCommand :: String -> ReplM (Either ErrorCase (Maybe Value))
 handleCommand x = do
     table <- rsOpTable <$> get
     case parseCommand table x of
         Left e -> do
             lift $ putStrLn $ show e
-            return $ Just CommandParseError
+            return $ Left CommandParseError
         Right Quit -> lift exitSuccess
         Right c -> do
             case c of
@@ -98,7 +98,7 @@ handleCommand x = do
                             loadFiles
                         else do
                             lift $ putStrLn $ "Cannot find file " ++ f
-                            return $ Just FileNotFoundError
+                            return $ Left FileNotFoundError
                 Reload -> do
                     loadFiles
                 Eval t -> do
@@ -106,18 +106,18 @@ handleCommand x = do
                     case runTermCheck t prog of
                         Left e -> do
                             lift $ putStrLn $ show e
-                            return $ Just TypeCheckError
+                            return $ Left TypeCheckError
                         Right _ ->
                             case interpretTerm prog t of
                                 Left e -> do
                                     lift $ putStrLn $ show e
-                                    return $ Just RunTimeError
+                                    return $ Left RunTimeError
                                 Right v -> do
                                     lift $ putStrLn $ prettyValue v
-                                    return Nothing
+                                    return $ Right $ Just v
                 Help -> do
                     lift printHelp
-                    return Nothing
+                    return $ Right Nothing
 
 printHelp :: IO ()
 printHelp =
@@ -130,7 +130,7 @@ printHelp =
         , "- :r ==> Reload the loaded funOmega files"
         ]
 
-loadFiles :: ReplM (Maybe ErrorCase)
+loadFiles :: ReplM (Either ErrorCase (Maybe Value))
 loadFiles = do
     files <- Set.toList <$> rsFiles <$> get
     sources <- lift $ forM files readFile
@@ -138,19 +138,18 @@ loadFiles = do
     case parseDefinitions source of
         Left e -> do
             lift $ putStrLn $ show e
-            return $ Just ProgramParseError
+            return $ Left ProgramParseError
         Right (defs, table) -> do
             let c = checkProgram defs
             case c of
                 Left e -> do
                     lift $ putStrLn $ show e
-                    return $ Just TypeCheckError
+                    return $ Left TypeCheckError
                 Right prog -> do
                     setProgram prog
                     setTable table
-                    lift $ putStrLn $ show defs
                     lift $ messagebox $ ["Successfylly loaded files "] ++ files
-                    return Nothing
+                    return $ Right Nothing
 
 -- ==== util ==== --
 

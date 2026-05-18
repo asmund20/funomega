@@ -1,6 +1,6 @@
 {-# LANGUAGE InstanceSigs #-}
 
-module TypeChecker (Analysis, checkProgram, runTermCheck) where
+module TypeChecker (Analysis, checkProgram, runTermCheck, TypeError) where
 
 import Control.Monad (ap, liftM)
 import Data.Foldable (forM_)
@@ -11,7 +11,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import Data.Traversable (forM)
-import Debug.Trace (traceM)
+import Debug.Trace (trace, traceM)
 import Syntax
 
 type TypeError = String
@@ -66,27 +66,43 @@ isType t1 t2 = Analysis $ \(_, _, i) -> Right ([t1 :==: t2], i, ())
 throwError :: TypeError -> Analysis a
 throwError e = Analysis $ \(_, _, _) -> Left e
 
+getCounter :: Analysis Int
+getCounter = Analysis $ \(_, _, i) -> Right ([], i + 1, i)
+
 newTypeVar :: Analysis Type
-newTypeVar = Analysis $ \(_, _, i) -> Right ([], i + 1, TypeVar $ show i)
+newTypeVar = do
+    i <- getCounter
+    traceM $ "Making new type variable " ++ show i
+    return $ TypeVar $ show i
 
 checkTerm :: Term -> Analysis Type
 checkTerm (Variable x) = do
+    traceM $ "Checking type of variable " ++ x
     prog <- getProgram
     env <- getEnvironment
-    case gamma prog x of
+    type' <- case gamma prog x of
         Nothing -> case Map.lookup x env of
             Nothing -> throwError $ "Undefined variable " ++ x
             Just t -> return t
         Just (t, _) -> return t
-checkTerm (Constructor c terms) = do
+    traceM $ "Got " ++ show type'
+    return type'
+checkTerm t@(Constructor c terms) = do
+    traceM $ "Checking type of " ++ show t
     prog <- getProgram
     case delta prog c of
         Nothing -> throwError $ "Undefined constructor " ++ c
         Just (d, xs, types) -> do
-            newTypeVars <- forM xs $ const newTypeVar
+            newTypeVars <- forM xs $ \x ->
+                TypeVar
+                    <$> (x ++)
+                    <$> (show <$> getCounter)
+            traceM "Generated some type variables for constructor"
             let sub = Map.fromList $ zip xs newTypeVars
             receivedTypes <- mapM checkTerm terms
             checkTerms receivedTypes $ map (substituteType sub) types
+
+            traceM $ "Got " ++ show (Prim d newTypeVars)
 
             return $ Prim d newTypeVars
   where
@@ -100,16 +116,17 @@ checkTerm (Constructor c terms) = do
                 "Checking constructor arguments: " ++ show type1 ++ " isType " ++ show type2
             type1 `isType` type2
             checkTerms type1s type2s
-checkTerm (Application t0 t1) = do
+checkTerm t@(Application t0 t1) = do
+    traceM $ "Starting application check for " ++ show t
     type0 <- checkTerm t0
     type1 <- checkTerm t1
     typeVar <- newTypeVar
     traceM $
-        "Checking application: "
-            ++ show (type1 :->: typeVar)
-            ++ " isType "
+        "Checking application: Left term is of type\n"
             ++ show type0
-    type1 :->: typeVar `isType` type0
+            ++ "\nRight term is of type\n"
+            ++ show (type1 :->: typeVar)
+    type0 `isType` (type1 :->: typeVar)
     return typeVar
 checkTerm (Case t cases) = do
     type' <- checkTerm t
@@ -148,14 +165,17 @@ checkTerm (Case t cases) = do
     bindVars (ConPat _ pats) = do
         envs <- mapM bindVars pats
         return $ foldl Map.union Map.empty envs
-checkTerm (Function x t) = do
+checkTerm term'@(Function x t) = do
+    traceM $ "Checking function term " ++ show term'
     typeVar <- newTypeVar
     retT <- localEnv (Map.singleton x typeVar) $ checkTerm t
+    traceM $ "Got type " ++ show (typeVar :->: retT)
     return $ typeVar :->: retT
 
 runTermCheck :: Term -> Program -> Either TypeError ()
 runTermCheck term prog = do
     (cs, _, _) <- runCheck (checkTerm term) (prog, Map.empty, 0)
+    traceM $ "Generated constraints for term:\n" ++ show cs
     _ <- solve cs
 
     return ()
@@ -188,7 +208,8 @@ checkDefinitions env ((DataDef d xs cons) : ds) = do
         checkType t1
 checkDefinitions env ((VarDef x type' term) : ds) = do
     let newEnv = Map.insert x type' env
-    traceM $ "Checking type for " ++ x ++ ": " ++ show type' ++ " = " ++ show term
+    traceM $
+        "Checking type for: " ++ x ++ ", which is: " ++ show type' ++ " = " ++ show term
     localEnv newEnv $ checkVarDef type' term
     traceM "\n\n\n"
     checkDefinitions newEnv ds
@@ -278,10 +299,12 @@ buildProgram ((VarDef x ty term) : ds) = addVar $ buildProgram ds
 solve :: [Constraint] -> Either TypeError Substitution
 solve constraints = do
     (_, solvedCs, sub) <- solve' constraints
-    traceM $ "Solved constraints, result is:\n" ++ show solvedCs
+    traceM $ "Solved constraints, result is:\n" ++ show (dropTrivial solvedCs)
 
     return sub
   where
+    dropTrivial :: [Constraint] -> [Constraint]
+    dropTrivial cs = catMaybes $ map (\c@(l :==: r) -> if l == r then Nothing else Just c) cs
     solve' ::
         [Constraint] -> Either TypeError ([Constraint], [Constraint], Substitution)
     solve' [] = Right ([], [], Map.empty)
