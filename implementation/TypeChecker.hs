@@ -11,7 +11,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import Data.Traversable (forM)
-import Debug.Trace (trace, traceM)
+import Debug.Trace (traceM)
 import Syntax
 
 type TypeError = String
@@ -25,7 +25,8 @@ type Substitution = Map X Type
 newtype Analysis a
     = Analysis
     { runCheck ::
-        (Program, Environment, Int) -> Either TypeError ([Constraint], Int, a)
+        (Program, Environment, Int) ->
+        Either TypeError ([Constraint], Substitution, Int, a)
     }
 
 instance Functor Analysis where
@@ -34,7 +35,7 @@ instance Functor Analysis where
 
 instance Applicative Analysis where
     pure :: a -> Analysis a
-    pure x = Analysis $ \(_, _, i) -> Right ([], i, x)
+    pure x = Analysis $ \(_, _, i) -> Right ([], Map.empty, i, x)
     (<*>) :: Analysis (a -> b) -> Analysis a -> Analysis b
     (<*>) = ap
 
@@ -46,28 +47,32 @@ instance Monad Analysis where
                 let x1 = runCheck a1 (prog, env, i)
                     x2 = case x1 of
                         Left e -> Left e
-                        Right (cs1, i', x) -> case runCheck (a2 x) (prog, env, i') of
+                        Right (cs1, sub, i', x) -> case runCheck (a2 x) (prog, env, i') of
                             Left e -> Left e
-                            Right (cs2, i'', x') -> Right (cs1 ++ cs2, i'', x')
+                            Right (cs2, sub', i'', x') ->
+                                Right (cs1 ++ cs2, Map.union sub sub', i'', x')
                  in x2
 
 getProgram :: Analysis Program
-getProgram = Analysis $ \(prog, _, i) -> Right ([], i, prog)
+getProgram = Analysis $ \(prog, _, i) -> Right ([], Map.empty, i, prog)
 
 getEnvironment :: Analysis Environment
-getEnvironment = Analysis $ \(_, env, i) -> Right ([], i, env)
+getEnvironment = Analysis $ \(_, env, i) -> Right ([], Map.empty, i, env)
 
 localEnv :: Environment -> Analysis a -> Analysis a
 localEnv envExtension (Analysis m) = Analysis $ \(prog, env, i) -> m (prog, Map.union envExtension env, i)
 
 isType :: Type -> Type -> Analysis ()
-isType t1 t2 = Analysis $ \(_, _, i) -> Right ([t1 :==: t2], i, ())
+isType t1 t2 = Analysis $ \(_, _, i) -> Right ([t1 :==: t2], Map.empty, i, ())
+
+addChangeBackMapping :: Substitution -> Analysis ()
+addChangeBackMapping sub = Analysis $ \(_, _, i) -> Right ([], sub, i, ())
 
 throwError :: TypeError -> Analysis a
 throwError e = Analysis $ \(_, _, _) -> Left e
 
 getCounter :: Analysis Int
-getCounter = Analysis $ \(_, _, i) -> Right ([], i + 1, i)
+getCounter = Analysis $ \(_, _, i) -> Right ([], Map.empty, i + 1, i)
 
 newTypeVar :: Analysis Type
 newTypeVar = do
@@ -93,14 +98,15 @@ checkTerm t@(Constructor c terms) = do
     case delta prog c of
         Nothing -> throwError $ "Undefined constructor " ++ c
         Just (d, xs, types) -> do
-            newTypeVars <- forM xs $ \x ->
-                TypeVar
-                    <$> (x ++)
-                    <$> (show <$> getCounter)
+            newVarNames <-
+                forM xs $ const $ (show <$> getCounter)
+            let newTypeVars = map TypeVar newVarNames
             traceM "Generated some type variables for constructor"
-            let sub = Map.fromList $ zip xs newTypeVars
+            let sub = Map.fromList $ zip xs $ newTypeVars
             receivedTypes <- mapM checkTerm terms
             checkTerms receivedTypes $ map (substituteType sub) types
+
+            addChangeBackMapping $ Map.fromList $ zip newVarNames $ map TypeVar xs
 
             traceM $ "Got " ++ show (Prim d newTypeVars)
 
@@ -174,7 +180,7 @@ checkTerm term'@(Function x t) = do
 
 runTermCheck :: Term -> Program -> Either TypeError ()
 runTermCheck term prog = do
-    (cs, _, _) <- runCheck (checkTerm term) (prog, Map.empty, 0)
+    (cs, _, _, _) <- runCheck (checkTerm term) (prog, Map.empty, 0)
     traceM $ "Generated constraints for term:\n" ++ show cs
     _ <- solve cs
 
@@ -231,11 +237,20 @@ checkProgram ds =
     if null sameName
         then do
             let p = buildProgram ds
-            (cs, _, _) <- runCheck (checkDefinitions Map.empty ds) (p, Map.empty, 0)
+            (cs, changeBackSub, _, _) <-
+                runCheck (checkDefinitions Map.empty ds) (p, Map.empty, 0)
             traceM $ show cs
+            traceM $ "Change back sub is: " ++ show changeBackSub
             sub <- solve cs
-            traceM $ show sub
-            Right $ buildProgram $ substitute sub ds
+            traceM $ "Sub is: " ++ show sub
+            traceM $ "Definitions without any subs is:\n" ++ show ds
+            traceM $
+                "Definitions with the type checker subs:\n"
+                    ++ show (map (substitute sub) ds)
+            traceM $
+                "Definitions with changeBackSub as well:\n"
+                    ++ show (map (substitute changeBackSub) $ map (substitute sub) ds)
+            Right $ buildProgram $ map (substitute changeBackSub) $ map (substitute sub) ds
         else do
             Left $
                 "Found top-level definitions with the same name. Multiple instances of "
@@ -258,11 +273,10 @@ checkProgram ds =
     longerThanOne (_ :| []) = Nothing
     longerThanOne l = Just l
 
-substitute :: Substitution -> [Definition] -> [Definition]
-substitute _ [] = []
-substitute sub (d@(DataDef _ _ _) : ds) = d : substitute sub ds
-substitute sub ((VarDef x type' term) : ds) =
-    (VarDef x (Map.findWithDefault type' x sub) term) : substitute sub ds
+substitute :: Substitution -> Definition -> Definition
+substitute _ (d@(DataDef _ _ _)) = d
+substitute sub ((VarDef x type' term)) =
+    (VarDef x (substituteType sub type') term)
 
 buildProgram :: [Definition] -> Program
 buildProgram [] = Program (const Nothing) (const Nothing) $ const False
