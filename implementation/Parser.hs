@@ -116,8 +116,10 @@ makeTermParser table = termParser table table
     termParser (OpTable ((Infix, ops) : rest)) fullTable = do
         let subTerm = termParser (OpTable rest) fullTable
         t1 <- subTerm
-        o <- opParser ops
-        (o t1) <$> subTerm
+        m <- optionMaybe $ opParser ops
+        case m of
+            Nothing -> return t1
+            Just o -> (o t1) <$> subTerm
     opParser :: [Op] -> Parser (Term -> Term -> Term)
     opParser ops = do
         o <- choice $ map (try . strings) ops
