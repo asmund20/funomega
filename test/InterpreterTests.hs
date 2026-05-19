@@ -94,15 +94,13 @@ testScopes = do
             -- TODO: Fix these tests
             checkTerm' "t" $ Value "C" []
 
--- putStrLn "      Interpreter.scopes Passes due to commented out tests"
--- return ()
-
-testInterpreter :: TestTree
+testInterpreter :: IO TestTree
 testInterpreter =
-    testGroup
-        "Interpreter test for funOmega"
-        [ testCase "Make number sanity" $ testMakeNumber
-        , testCase "Example from task" testExample
-        , testCase "Numbers" testNumbers
-        , testCase "Scopes" testScopes
-        ]
+    return $
+        testGroup
+            "Interpreter test for funOmega"
+            [ testCase "Make number sanity" $ testMakeNumber
+            , testCase "Example from task" testExample
+            , testCase "Numbers" testNumbers
+            , testCase "Scopes" testScopes
+            ]

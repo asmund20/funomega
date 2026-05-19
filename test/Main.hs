@@ -7,8 +7,9 @@ import ParserTests
 import TypeCheckerTests (testTypeChecker)
 
 main :: IO ()
-main =
+main = do
+    interpreterTest <- testInterpreter
     defaultMain $
         localOption (mkTimeout 30000000) $
             testGroup "Test Suite:" $
-                [testParser, testTypeChecker, testInterpreter]
+                [testParser, testTypeChecker, interpreterTest]
