@@ -94,20 +94,17 @@ testNumbers = do
             checkTerm' "S (S Z)" nat
             checkTerm' "n5" nat
             checkTerm' "Z + n2" nat
+            checkTerm' "n8 - Z" nat
+            checkTerm' "S (S Z) * n10" nat
+            checkTerm' "S Z == Z" bool
+            checkTerm' "Z == Z" bool
+            checkTerm' "n3 == S Z" bool
             checkTerm' "plus" $ nat :->: (nat :->: nat)
             checkTerm' "plus Z" $ nat :->: nat
             checkTerm' "plusTen" $ nat :->: nat
             detectError' "S True"
             detectError' "True == False"
             detectError' "True * False"
-
-            -- TODO: Fix these tests
-            putStrLn "Known failures for number:"
-            checkTerm' "n8 - Z" nat
-            checkTerm' "S (S Z) * n10" nat
-            checkTerm' "S Z == Z" bool
-            checkTerm' "Z == Z" bool
-            checkTerm' "n3 == S Z" bool
             detectError' "True + n2"
             detectError' "n3 + False"
             detectError' "S Z * True"
