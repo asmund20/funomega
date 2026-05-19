@@ -1,0 +1,24 @@
+data Nat = | Z | S Nat .
+
+data Pair a b = | P a b .
+
+data List a = | Nil | Cons a (List a) .
+
+data Maybe a = | Nothing | Just a .
+
+data Either a b = | Left a | Right b .
+
+
+first : Pair a b -> a = fun p -> case p of
+    ; P l r -> l .
+
+second : Pair a b -> b = fun p -> case p of
+    ; P l r -> r .
+
+head : List a -> Maybe a = fun l -> case l of
+    ; Nil -> Nothing
+    ; Cons x xs -> Just x .
+
+left : Either a b -> Maybe a = fun e -> case e of
+    ; Left x -> Just x
+    ; Right x -> Nothing .

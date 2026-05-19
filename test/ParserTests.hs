@@ -1,4 +1,4 @@
-module ParserTests where
+module ParserTests (testParser) where
 
 import Parser
 import Syntax
@@ -93,6 +93,13 @@ testSamePrecDiffAssoc = do
         Left _ -> return ()
         Right _ -> assertFailure "Fail"
 
+testExample :: Assertion
+testExample = do
+    source <- readFile "examples/example.fomega"
+    case parseDefinitions source of
+        Left e -> assertFailure $ show e
+        Right _ -> return ()
+
 testEmpty :: Assertion
 testEmpty = do
     source <- readFile "examples/empty.fomega"
@@ -104,10 +111,11 @@ testParser :: TestTree
 testParser =
     testGroup
         "Parser test for funOmega"
-        [ testCase "Assiciativity" testAssociativity
+        [ testCase "Empty program" testEmpty
+        , testCase "Assiciativity" testAssociativity
         , testCase "Precedence" testPrecedence
         , testCase "Binary operator" testBinaryOperator
         , testCase "Same precedence different associativity" testSamePrecDiffAssoc
-        , testCase "Empty program" testEmpty
         , testCase "Multiple type variables" testMultipleTypeVariables
+        , testCase "Example from task" testExample
         ]
