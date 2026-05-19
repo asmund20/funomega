@@ -85,7 +85,7 @@ testNumbers = do
 
 testScopes :: Assertion
 testScopes = do
-    source <- readFile "examples/failure.fomega"
+    source <- readFile "examples/names.fomega"
     case load source of
         Left e -> assertFailure e
         Right (prog, table) -> do
