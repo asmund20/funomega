@@ -5,6 +5,8 @@ import Syntax
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit
 
+-- TODO: Add some more programs that do not parse correctly during load
+
 parsedEqually :: OpTable -> String -> String -> Assertion
 parsedEqually table t1 t2 =
     case parseCommand table t1 of
