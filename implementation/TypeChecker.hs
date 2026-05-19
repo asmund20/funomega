@@ -146,12 +146,12 @@ checkTerm (Function x t) = do
     retT <- localEnv (Map.singleton x typeVar) $ checkTerm t
     return $ typeVar :->: retT
 
-runTermCheck :: Term -> Program -> Either TypeError ()
+runTermCheck :: Term -> Program -> Either TypeError Type
 runTermCheck term prog = do
-    (cs, _, _, _) <- runCheck (checkTerm term) (prog, Map.empty, 0)
-    _ <- solve cs
+    (cs, changeBackSub, _, t) <- runCheck (checkTerm term) (prog, Map.empty, 0)
+    sub <- solve cs
 
-    return ()
+    return $ substituteType changeBackSub $ substituteType sub t
 
 checkDefinitions :: Environment -> [Definition] -> Analysis ()
 checkDefinitions _ [] = return ()

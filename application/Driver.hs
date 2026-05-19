@@ -107,12 +107,13 @@ handleCommand x = do
                         Left e -> do
                             lift $ putStrLn $ show e
                             return $ Left TypeCheckError
-                        Right _ ->
+                        Right type' ->
                             case interpretTerm prog t of
                                 Left e -> do
                                     lift $ putStrLn $ show e
                                     return $ Left RunTimeError
                                 Right v -> do
+                                    lift $ putStrLn $ show type'
                                     lift $ putStrLn $ prettyValue v
                                     return $ Right $ Just v
                 Help -> do
