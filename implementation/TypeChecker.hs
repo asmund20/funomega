@@ -271,6 +271,9 @@ solve constraints = do
         | otherwise = do
             (cs', con, sub) <- resolveSingle c
             (cs'', cons, sub') <- solve' $ cs' ++ substituteConstraints sub cs
+            -- The substituion will have some things that map to type variables
+            -- that will be resolved later. The later ones must be used to map
+            -- the existing ones to their actual type.
             let sub'' = Map.union sub' $ Map.map (substituteType sub') sub
             return
                 ( cs''
