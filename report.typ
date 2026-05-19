@@ -12,4 +12,6 @@
 #outline(depth: 2)
 
 = Known issues
-- `examples/test.fomega` should result in C, it gets B.
+- `examples/failure.fomega` should result in C, it gets B.
+- `data Something a a = Trivial .` should likely fail due to the same type
+  variable being used twice.
