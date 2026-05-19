@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wno-unused-local-binds #-}
 
-module TypeCheckerTests (testTypeChecker) where
+module TypeCheckerTests (testTypeChecker, load) where
 
 import Parser
 import Syntax
@@ -23,8 +23,9 @@ checkTerm table prog command expectedT = case parseCommand table command of
     Left e -> assertFailure $ show e
     Right (Eval term) -> case runTermCheck term prog of
         Left e -> assertFailure $ show e
-        Right t -> assertEqual "Different types" expectedT t
-    Right c -> assertFailure $ "Expected Eval command, got " ++ show c
+        Right t -> assertEqual (command ++ "\n") expectedT t
+    Right c ->
+        assertFailure $ "Expected Eval command, got " ++ show c ++ "\nFrom " ++ command
 
 detectError :: OpTable -> Program -> String -> Assertion
 detectError table prog command = case parseCommand table command of
@@ -37,7 +38,8 @@ detectError table prog command = case parseCommand table command of
                     ++ command
                     ++ " to not pass type check, got type "
                     ++ show t
-    Right c -> assertFailure $ "Expected Eval command, got " ++ show c
+    Right c ->
+        assertFailure $ "Expected Eval command, got " ++ show c ++ "\nFrom " ++ command
 
 testEmpty :: Assertion
 testEmpty = do
@@ -99,17 +101,16 @@ testNumbers = do
             detectError' "True == False"
             detectError' "True * False"
 
-            -- TODO: These commented out tests fail. Comment in when done making
-            -- tests and remove dummy below
-            -- checkTerm' "n8 - Z" nat
-            -- checkTerm' "S (S Z) * n10" nat
-            -- checkTerm' "S Z == Z" bool
-            -- checkTerm' "Z == Z" bool
-            -- checkTerm' "n3 == S Z" bool
-            -- detectError' "True + n2"
-            -- detectError' "n3 + False"
-            -- detectError' "S Z * True"
-            assertBool "Dummy" True
+            -- TODO: Fix these tests
+            putStrLn "Known failures for number:"
+            checkTerm' "n8 - Z" nat
+            checkTerm' "S (S Z) * n10" nat
+            checkTerm' "S Z == Z" bool
+            checkTerm' "Z == Z" bool
+            checkTerm' "n3 == S Z" bool
+            detectError' "True + n2"
+            detectError' "n3 + False"
+            detectError' "S Z * True"
 
 testConstructors :: Assertion
 testConstructors = do
