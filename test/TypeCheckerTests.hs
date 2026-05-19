@@ -8,6 +8,8 @@ import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit
 import TypeChecker
 
+-- TODO: Make some programs that fail type checking when parsing definitions
+
 load :: String -> Either String (Program, OpTable)
 load source = do
     case parseDefinitions source of
