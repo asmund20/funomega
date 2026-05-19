@@ -3,7 +3,7 @@
 module TypeChecker (Analysis, checkProgram, runTermCheck, TypeError) where
 
 import Control.Monad (ap, liftM)
-import Data.Foldable (forM_)
+import Data.Foldable (foldlM, forM_)
 import Data.List (intercalate, sort)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
@@ -120,23 +120,21 @@ checkTerm (Application t0 t1) = do
     return typeVar
 checkTerm (Case t cases) = do
     type' <- checkTerm t
-    typeCases <- checkCase type' cases
+    typeCases <- checkCases type' cases
     return typeCases
   where
-    checkCase :: Type -> [(Pattern, Term)] -> Analysis Type
-    checkCase _ [] = throwError $ "Empty case term"
-    checkCase type' [(pat, term)] = do
+    checkCases :: Type -> [(Pattern, Term)] -> Analysis Type
+    checkCases _ [] = throwError $ "Empty case term"
+    checkCases type' cs = do
+        types <- forM cs $ checkCase type'
+        dummy <- newTypeVar
+        foldlM (\t1 t2 -> isType t1 t2 >>= const (return t2)) dummy types
+    checkCase :: Type -> (Pattern, Term) -> Analysis Type
+    checkCase type' (pat, term) = do
         env <- bindVars pat
         patternType <- localEnv env $ checkTerm $ toTerm pat
         type' `isType` patternType
         termType <- localEnv env $ checkTerm term
-        return termType
-    checkCase type' ((pat, term) : rest) = do
-        patternType <- checkTerm $ toTerm pat
-        type' `isType` patternType
-        restType <- checkCase type' rest
-        termType <- checkTerm term
-        restType `isType` termType
         return termType
     bindVars :: Pattern -> Analysis Environment
     bindVars (VarPat x) = Map.singleton x <$> newTypeVar
@@ -272,8 +270,7 @@ solve constraints = do
         | t1 == t2 = solve' cs
         | otherwise = do
             (cs', con, sub) <- resolveSingle c
-            let subbed = cs' ++ substituteConstraints sub cs
-            (cs'', cons, sub') <- solve' $ cs' ++ subbed
+            (cs'', cons, sub') <- solve' $ cs' ++ substituteConstraints sub cs
             let sub'' = Map.union sub sub'
             return
                 ( cs''
