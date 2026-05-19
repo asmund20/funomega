@@ -271,7 +271,7 @@ solve constraints = do
         | otherwise = do
             (cs', con, sub) <- resolveSingle c
             (cs'', cons, sub') <- solve' $ cs' ++ substituteConstraints sub cs
-            let sub'' = Map.union sub sub'
+            let sub'' = Map.union sub' $ Map.map (substituteType sub') sub
             return
                 ( cs''
                 , substituteConstraints sub'' $ con `appendIfJust` cons
