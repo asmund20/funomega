@@ -15,3 +15,5 @@
 - `examples/failure.fomega` should result in C, it gets B.
 - `data Something a a = Trivial .` should likely fail due to the same type
   variable being used twice.
+- `examples/numbers.fomega`: The multiplication does not work, though it should
+  be the correct funomega program for multiplication.

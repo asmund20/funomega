@@ -10,17 +10,21 @@ data List a = | Nil | Cons a (List a) .
 
 infixr 0 h :: tail = Cons h tail .
 
-infixl 2 n1 + n2 = plus n1 n2 .
+infixl 3 n1 + n2 = plus n1 n2 .
 
-infixl 2 n1 - n2 = case n2 of
+infixl 3 n1 - n2 = case n2 of
     ; Z -> n1
     ; S nn2 -> case n1 of
         ; Z -> Z
         ; S nn1 -> nn1 - nn2 .
 
-infixl 1 n1 * n2 = case n1 of
+infixl 2 n1 * n2 = case n1 of
     ; Z -> Z
     ; S n -> n2 + n * n1 .
+
+infixr 1 n1 ^ n2 = case n2 of
+    ; Z -> S Z
+    ; S n -> n1 * n1 ^ n .
 
 plus: Nat -> Nat -> Nat = fun n1 -> fun n2 -> case n1 of
     ; Z -> n2
@@ -30,7 +34,7 @@ plusTen : Nat -> Nat = plus n10 .
 
 double : Nat -> Nat = fun n1 -> n1 * n2 .
 
-infix 3 n1 == n2 = case n1 of
+infix 100 n1 == n2 = case n1 of
     ; Z -> (case n2 of
         ; Z -> True
         ; x -> False)
@@ -54,3 +58,8 @@ n12 : Nat  = S n11 .
 n13 : Nat = S n12 .
 n14 : Nat = S n13 .
 n15 : Nat  = S n14 .
+n20 : Nat = n10 + n10 .
+n30 : Nat = n20 + n10 .
+n40 : Nat = n20 + n20 .
+n50 : Nat = n10 + n40 .
+n100 : Nat = n50 + n50 .
