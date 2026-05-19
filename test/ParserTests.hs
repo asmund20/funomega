@@ -76,6 +76,16 @@ testBinaryOperator = do
                         (Application (Variable "==") (Variable "n1"))
                         (Variable "n1")
 
+testMultipleTypeVariables :: Assertion
+testMultipleTypeVariables = do
+    case parseDefinitions "data Test a b = | Dummy a b ." of
+        Left e -> assertFailure $ show e
+        Right (ds, _) ->
+            assertEqual
+                "Fail"
+                ds
+                [DataDef "Test" ["a", "b"] [("Dummy", [TypeVar "a", TypeVar "b"])]]
+
 testSamePrecDiffAssoc :: Assertion
 testSamePrecDiffAssoc = do
     source <- readFile "test/failureCases/precAssocConflict.fomega"
@@ -99,4 +109,5 @@ testParser =
         , testCase "Binary operator" testBinaryOperator
         , testCase "Same precedence different associativity" testSamePrecDiffAssoc
         , testCase "Empty program" testEmpty
+        , testCase "Multiple type variables" testMultipleTypeVariables
         ]
