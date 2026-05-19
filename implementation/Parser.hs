@@ -29,6 +29,7 @@ reservedOpNames =
     [ "."
     , "="
     , ":"
+    , ";"
     ]
 
 -- Exported parsing functions
