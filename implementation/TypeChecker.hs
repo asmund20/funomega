@@ -180,6 +180,7 @@ checkDefinitions env ((DataDef d xs cons) : ds) = do
         checkType t0
         checkType t1
 checkDefinitions env ((VarDef x type' term) : ds) = do
+    -- TODO: Instantiate type variables in type' and add to changeBackMapping
     let newEnv = Map.insert x type' env
     localEnv newEnv $ checkVarDef type' term
     checkDefinitions newEnv ds
