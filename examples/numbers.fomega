@@ -20,7 +20,7 @@ infixl 3 n1 - n2 = case n2 of
 
 infixl 2 n1 * n2 = case n1 of
     ; Z -> Z
-    ; S n -> n2 + n * n1 .
+    ; S n -> n2 + n * n2 .
 
 infixr 1 n1 ^ n2 = case n2 of
     ; Z -> S Z
