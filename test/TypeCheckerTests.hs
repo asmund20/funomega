@@ -61,6 +61,7 @@ testExample = do
                 Prim "Bool" [] :->: (Prim "Bool" [] :->: Prim "Bool" [])
             checkTerm table prog "xor True" $ Prim "Bool" [] :->: Prim "Bool" []
             detectError table prog "xor hallo True"
+            detectError table prog "Maybe"
 
 testList :: Assertion
 testList = do
@@ -133,12 +134,30 @@ testConstructors = do
             detectError' "S"
             detectError' "Z Z"
 
-testDuplicateData :: Assertion
-testDuplicateData = do
-    source <- readFile "examples/typeCheckerToReject.fomega"
+testEmptyPatternList :: Assertion
+testEmptyPatternList =
+    assertBool "Empty pattern list should err" $
+        isLeft $
+            load "x: a = case (fun y -> y) of ."
+
+testDuplicates :: Assertion
+testDuplicates = do
+    let source = "data Dummy a a = | Nothing ."
     case load source of
         Left _ -> return ()
         Right _ -> assertFailure $ "The following program should fail:\n" ++ source
+    assertBool "Load should fail for duplicate data definitions" $
+        isLeft $
+            load "data A = | First . data A = | Second ."
+    assertBool "Load should fail for duplicate constructors" $
+        isLeft $
+            load "data Dup = | A . data Dup = | B ."
+    assertBool "Load should fail for duplicate binary operators" $
+        isLeft $
+            load "infix 0 l + r = l . infix 0 l + r = r ."
+    assertBool "Load should fail for duplicate variables" $
+        isLeft $
+            load "x: a = fun y -> y . x : b = fun z -> fun d -> z ."
 
 testLoadFails :: Assertion
 testLoadFails = do
@@ -154,6 +173,7 @@ testTypeChecker =
         , testCase "Boolean lists" testList
         , testCase "Numbers" testNumbers
         , testCase "Constructors" testConstructors
-        , testCase "Duplicate type vars in data" testDuplicateData
+        , testCase "Duplicates" testDuplicates
         , testCase "Detects type errors in source files" testLoadFails
+        , testCase "Empty pattern list in case" testEmptyPatternList
         ]

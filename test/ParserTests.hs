@@ -50,6 +50,7 @@ testAssociativity = do
                 table
                 "S Z + Z - S (S Z) + (S (S Z))"
                 "((S Z + Z) - S (S Z)) + (S (S Z))"
+            parsedEqually table "S Z ^ Z ^ S (S Z)" "S Z ^ (Z ^ S (S Z))"
             parseFail table "S Z == S (S Z) == n5"
 
 testPrecedence :: Assertion

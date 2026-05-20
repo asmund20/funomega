@@ -14,6 +14,8 @@ makeNumber n = "(S " ++ makeNumber (n - 1) ++ ")"
 testMakeNumber :: Assertion
 testMakeNumber = do
     assertEqual "Zero" "Z" $ makeNumber 0
+    assertEqual "One" "(S Z)" $ makeNumber 1
+    assertEqual "One" "(S (S Z))" $ makeNumber 2
     assertEqual "Five" "(S (S (S (S (S Z)))))" $ makeNumber 5
 
 execute :: Program -> OpTable -> String -> Either String Value
@@ -78,6 +80,7 @@ testNumbers = do
             checkNumber' "Z * n12" $ 0
             checkNumber' "n14 ^ Z" $ 1
             checkNumber' "n6 ^ n0" $ 1
+            checkNumber' "n4 ^ n2" $ 16
             checkTerm' "S Z == Z" $ Value "False" []
             checkTerm' "Z == Z" $ Value "True" []
             checkTerm' "n3 == S Z" $ Value "False" []
