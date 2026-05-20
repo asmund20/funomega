@@ -1,0 +1,5 @@
+data Nat = | Z | S Nat .
+
+plusOne: a = fun x -> case x of
+    ; S n1 n2 -> S (S n1)
+    ; Z -> S Z .

@@ -1,0 +1,4 @@
+data Nat = | Z | S Nat .
+data Bool = | True | False .
+
+x : Bool = S (S Z) .

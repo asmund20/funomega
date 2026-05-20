@@ -39,7 +39,7 @@ checkTermFails :: OpTable -> Program -> String -> Assertion
 checkTermFails table prog command = case parseCommand table command of
     Left e -> assertFailure $ show e
     Right (Eval term) -> case interpretTerm prog term of
-        Left e -> return ()
+        Left _ -> return ()
         Right v -> assertFailure $ command ++ "\n" ++ show v
     Right c -> assertFailure $ "Expected Eval command, got " ++ show c
 
@@ -96,6 +96,7 @@ testNonExhaustive = do
         Right (prog, table) -> do
             let checkTerm' = checkTerm table prog
             checkTerm' "isZero Z" $ Value "Z" []
+            checkTermFails table prog "isZero (S Z)"
 
 testAlphaConversion :: Assertion
 testAlphaConversion = do
@@ -103,8 +104,7 @@ testAlphaConversion = do
     case load source of
         Left e -> assertFailure e
         Right (prog, table) -> do
-            checkTerm table prog "isZero Z" $ Value "C" []
-            checkTermFails table prog "isZero (S Z)"
+            checkTerm table prog "t" $ Value "C" []
 
 testInterpreter :: IO TestTree
 testInterpreter =

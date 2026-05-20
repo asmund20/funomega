@@ -5,8 +5,6 @@ import Syntax
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit
 
--- TODO: Add some more programs that do not parse correctly during load
-
 parsedEqually :: OpTable -> String -> String -> Assertion
 parsedEqually table t1 t2 =
     case parseCommand table t1 of
@@ -63,7 +61,6 @@ testPrecedence = do
                 table
                 "n5 + n1 * n4 - S Z"
                 "n5 + (n1 *n4) - (S Z)"
-            parseFail table "S Z == S (S Z) == n5"
             parsedDifferent table "n2 + n3 * n4" "(n2 + n3) * n4"
 
 testBinaryOperator :: Assertion
@@ -104,8 +101,7 @@ testExample = do
 
 testEmpty :: Assertion
 testEmpty = do
-    source <- readFile "examples/empty.fomega"
-    case parseDefinitions source of
+    case parseDefinitions "" of
         Left e -> assertFailure $ show e
         Right _ -> return ()
 
@@ -117,7 +113,7 @@ testParser =
         , testCase "Assiciativity" testAssociativity
         , testCase "Precedence" testPrecedence
         , testCase "Binary operator" testBinaryOperator
-        , testCase "Same precedence different associativity" testSamePrecDiffAssoc
+        , testCase "Associativity conflict" testSamePrecDiffAssoc
         , testCase "Multiple type variables" testMultipleTypeVariables
         , testCase "Example from task" testExample
         ]

@@ -2,13 +2,12 @@
 
 module TypeCheckerTests (testTypeChecker, load) where
 
+import Data.Either (isLeft)
 import Parser
 import Syntax
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit
 import TypeChecker
-
--- TODO: Make some programs that fail type checking when parsing definitions
 
 load :: String -> Either String (Program, OpTable)
 load source = do
@@ -27,6 +26,10 @@ checkTerm table prog command expectedT = case parseCommand table command of
     Right c ->
         assertFailure $ "Expected Eval command, got " ++ show c ++ "\nFrom " ++ command
 
+loadFails :: FilePath -> Assertion
+loadFails file =
+    readFile file >>= \source -> assertBool ("Load should fail for " ++ source) $ isLeft $ load source
+
 detectError :: OpTable -> Program -> String -> Assertion
 detectError table prog command = case parseCommand table command of
     Left e -> assertFailure $ show e
@@ -43,8 +46,7 @@ detectError table prog command = case parseCommand table command of
 
 testEmpty :: Assertion
 testEmpty = do
-    source <- readFile "examples/empty.fomega"
-    case load source of
+    case load "" of
         Left e -> assertFailure e
         Right _ -> return ()
 
@@ -130,6 +132,9 @@ testConstructors = do
             checkTerm' "head" $ (list $ TypeVar "a") :->: mbe (TypeVar "a")
             detectError' "first (S Z)"
             detectError' "first (Right Nil)"
+            detectError' "S S Z"
+            detectError' "S"
+            detectError' "Z Z"
 
 testDuplicateData :: Assertion
 testDuplicateData = do
@@ -137,6 +142,11 @@ testDuplicateData = do
     case load source of
         Left _ -> return ()
         Right _ -> assertFailure $ "The following program should fail:\n" ++ source
+
+testLoadFails :: Assertion
+testLoadFails = do
+    loadFails "examples/typeError.fomega"
+    loadFails "examples/tooManyPattern.fomega"
 
 testTypeChecker :: TestTree
 testTypeChecker =
@@ -148,4 +158,5 @@ testTypeChecker =
         , testCase "Numbers" testNumbers
         , testCase "Constructors" testConstructors
         , testCase "Duplicate type vars in data" testDuplicateData
+        , testCase "Detects type errors in source files" testLoadFails
         ]
