@@ -76,7 +76,7 @@ definition term = dataDef <|> binOpDef <|> varDef
         vars <- many variableName
         _ <- strings "="
         constructors <-
-            many1 (strings "|" >> pair <$> constructorName <*> many typeParser)
+            many1 (strings "|" >> (,) <$> constructorName <*> many typeParser)
         return $ DataDef dataName vars constructors
     binOpDef :: Parser Definition
     binOpDef = do
@@ -100,7 +100,6 @@ definition term = dataDef <|> binOpDef <|> varDef
                 )
             <*> typeParser
             <*> (strings "=" >> term)
-    pair a b = (a, b)
 
 -- The parsers used in second pass
 
@@ -132,7 +131,7 @@ appOrCons table =
         <$> constructorName
         <*> many literal
     )
-        <|> (chainl1 literal (return Application))
+        <|> (chainl1 literal $ return Application)
   where
     literal =
         choice
@@ -155,8 +154,7 @@ appOrCons table =
                         >> many caseInstance
                     )
     parenTerm = strings "(" *> (makeTermParser table) <* strings ")"
-    caseInstance = strings ";" >> pair <$> pattern <*> (strings "->" >> (makeTermParser table))
-    pair l r = (l, r)
+    caseInstance = strings ";" >> (,) <$> pattern <*> (strings "->" >> (makeTermParser table))
 
 pattern :: Parser Pattern
 pattern = topLevel
