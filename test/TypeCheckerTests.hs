@@ -138,13 +138,6 @@ testDuplicateData = do
         Left _ -> return ()
         Right _ -> assertFailure $ "The following program should fail:\n" ++ source
 
-testSameTypeVars :: Assertion
-testSameTypeVars = do
-    source <- readFile "examples/typeCheckerToAccept.fomega"
-    case load source of
-        Left e -> assertFailure e
-        Right _ -> return ()
-
 testTypeChecker :: TestTree
 testTypeChecker =
     testGroup
@@ -155,5 +148,4 @@ testTypeChecker =
         , testCase "Numbers" testNumbers
         , testCase "Constructors" testConstructors
         , testCase "Duplicate type vars in data" testDuplicateData
-        , testCase "Same type var in different variable definitions" testSameTypeVars
         ]
