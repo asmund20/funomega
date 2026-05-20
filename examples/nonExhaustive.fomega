@@ -1,0 +1,4 @@
+data Nat = | Z | S Nat .
+
+isZero : Nat -> Nat = fun x -> case x of
+    ; Z -> Z .

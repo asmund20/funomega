@@ -30,10 +30,17 @@ checkNumber table prog command n = case execute prog table (makeNumber n) of
 checkTerm :: OpTable -> Program -> String -> Value -> Assertion
 checkTerm table prog command expectedV = case parseCommand table command of
     Left e -> assertFailure $ show e
-    -- Not running type check here, as it should be tested elsewhere
     Right (Eval term) -> case interpretTerm prog term of
         Left e -> assertFailure $ command ++ "\n" ++ show e
         Right v -> assertEqual (command ++ "\n") expectedV v
+    Right c -> assertFailure $ "Expected Eval command, got " ++ show c
+
+checkTermFails :: OpTable -> Program -> String -> Assertion
+checkTermFails table prog command = case parseCommand table command of
+    Left e -> assertFailure $ show e
+    Right (Eval term) -> case interpretTerm prog term of
+        Left e -> return ()
+        Right v -> assertFailure $ command ++ "\n" ++ show v
     Right c -> assertFailure $ "Expected Eval command, got " ++ show c
 
 testExample :: Assertion
@@ -81,15 +88,23 @@ testNumbers = do
             checkNumber' "n6 ^ n1" $ 6
             checkNumber' "n5 ^ n2" $ 5 ^ (2 :: Integer)
 
-testScopes :: Assertion
-testScopes = do
-    source <- readFile "examples/names.fomega"
+testNonExhaustive :: Assertion
+testNonExhaustive = do
+    source <- readFile "examples/nonExhaustive.fomega"
     case load source of
         Left e -> assertFailure e
         Right (prog, table) -> do
             let checkTerm' = checkTerm table prog
+            checkTerm' "isZero Z" $ Value "Z" []
 
-            checkTerm' "t" $ Value "C" []
+testAlphaConversion :: Assertion
+testAlphaConversion = do
+    source <- readFile "examples/alpha.fomega"
+    case load source of
+        Left e -> assertFailure e
+        Right (prog, table) -> do
+            checkTerm table prog "isZero Z" $ Value "C" []
+            checkTermFails table prog "isZero (S Z)"
 
 testInterpreter :: IO TestTree
 testInterpreter =
@@ -99,5 +114,6 @@ testInterpreter =
             [ testCase "Make number sanity" $ testMakeNumber
             , testCase "Example from task" testExample
             , testCase "Numbers" testNumbers
-            , testCase "Scopes" testScopes
+            , testCase "Non-exhaustive patterns" testNonExhaustive
+            , testCase "Alpha conversion" testAlphaConversion
             ]
