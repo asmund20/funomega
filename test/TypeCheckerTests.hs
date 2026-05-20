@@ -2,7 +2,7 @@
 
 module TypeCheckerTests (testTypeChecker, load) where
 
-import Data.Either (isLeft)
+import Data.Either (isLeft, isRight)
 import Parser
 import Syntax
 import Test.Tasty (TestTree, testGroup)
@@ -45,10 +45,7 @@ detectError table prog command = case parseCommand table command of
         assertFailure $ "Expected Eval command, got " ++ show c ++ "\nFrom " ++ command
 
 testEmpty :: Assertion
-testEmpty = do
-    case load "" of
-        Left e -> assertFailure e
-        Right _ -> return ()
+testEmpty = assertBool "Empty program should type check" $ isRight $ load ""
 
 testExample :: Assertion
 testExample = do

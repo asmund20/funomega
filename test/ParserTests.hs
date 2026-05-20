@@ -1,5 +1,6 @@
 module ParserTests (testParser) where
 
+import Data.Either (isRight)
 import Parser
 import Syntax
 import Test.Tasty (TestTree, testGroup)
@@ -100,10 +101,7 @@ testExample = do
         Right _ -> return ()
 
 testEmpty :: Assertion
-testEmpty = do
-    case parseDefinitions "" of
-        Left e -> assertFailure $ show e
-        Right _ -> return ()
+testEmpty = assertBool "Empty program should type check" $ isRight $ parseDefinitions ""
 
 testParser :: TestTree
 testParser =
