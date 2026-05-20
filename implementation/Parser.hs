@@ -237,9 +237,6 @@ parseInfixes s = do
     operators <- parse (infixity <* eof) "infixes" s
     let sorted = reverse $ sortBy sorting operators
         groups = groupBy grouping sorted
-        -- TODO: Test this with a function that just loops through the list
-        -- instead of a second group by. Use grouping only by precedence, and
-        -- check that all the fixities are the same.
         testGroups = groupBy testGrouping sorted
         withoutPrec = map (fmap removePrec) groups
 
