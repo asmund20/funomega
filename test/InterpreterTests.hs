@@ -89,7 +89,6 @@ testScopes = do
         Right (prog, table) -> do
             let checkTerm' = checkTerm table prog
 
-            -- TODO: Fix these tests
             checkTerm' "t" $ Value "C" []
 
 testInterpreter :: IO TestTree
