@@ -77,6 +77,13 @@ testNumbers = do
             checkTerm' "S (S (S (S Z))) == n4" $ Value "True" []
             checkTerm' ("n15 == " ++ makeNumber 15) $ Value "True" []
 
+numbersThatFail :: Assertion
+numbersThatFail = do
+    source <- readFile "examples/numbers.fomega"
+    case load source of
+        Left e -> assertFailure e
+        Right (prog, table) -> do
+            let checkNumber' = checkNumber table prog
             -- TODO: Fix these tests
             checkNumber' "n10 * Z" $ 0
             checkNumber' "S (S Z) * n10" $ 2 * 10
@@ -103,4 +110,5 @@ testInterpreter =
             , testCase "Example from task" testExample
             , testCase "Numbers" testNumbers
             , testCase "Scopes" testScopes
+            , testCase "Numbers that fail" numbersThatFail
             ]
