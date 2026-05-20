@@ -1,4 +1,4 @@
-module Parser (parseDefinitions, parseInfixes, parseCommand) where
+module Parser (parseDefinitions, parseCommand) where
 
 import Data.Char (isAlphaNum, isControl, isSpace)
 import Data.Foldable (Foldable (toList))

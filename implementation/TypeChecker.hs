@@ -78,6 +78,44 @@ newTypeVar = do
     i <- getCounter
     return $ TypeVar $ show i
 
+runTermCheck :: Term -> Program -> Either TypeError Type
+runTermCheck term prog = do
+    (cs, changeBackSub, _, t) <- runCheck (checkTerm term) (prog, Map.empty, 0)
+    sub <- solve cs
+
+    return $ substituteType changeBackSub $ substituteType sub t
+
+checkProgram :: [Definition] -> Either TypeError Program
+checkProgram ds =
+    if null sameName
+        then do
+            let p = buildProgram ds
+            (cs, changeBackSub, _, _) <-
+                runCheck (checkDefinitions Map.empty ds) (p, Map.empty, 0)
+            sub <- solve cs
+            Right $ buildProgram $ map (substitute changeBackSub) $ map (substitute sub) ds
+        else do
+            Left $
+                "Found top-level definitions with the same name. Multiple instances of "
+                    ++ intercalate ", " sameName
+  where
+    sameName :: [Name]
+    sameName =
+        let constructorNames = concatMap getConstructorNames ds
+            defNames = map getName ds
+            groupedNames = NonEmpty.group $ sort $ constructorNames ++ defNames
+            duplicates = catMaybes $ map longerThanOne groupedNames
+         in map NonEmpty.head duplicates
+    getName :: Definition -> Name
+    getName (VarDef x _ _) = x
+    getName (DataDef d _ _) = d
+    getConstructorNames :: Definition -> [Name]
+    getConstructorNames (VarDef _ _ _) = []
+    getConstructorNames (DataDef _ _ cs) = map (\(c, _) -> c) cs
+    longerThanOne :: NonEmpty a -> Maybe (NonEmpty a)
+    longerThanOne (_ :| []) = Nothing
+    longerThanOne l = Just l
+
 checkTerm :: Term -> Analysis Type
 checkTerm (Variable x) = do
     prog <- getProgram
@@ -146,13 +184,6 @@ checkTerm (Function x t) = do
     retT <- localEnv (Map.singleton x typeVar) $ checkTerm t
     return $ typeVar :->: retT
 
-runTermCheck :: Term -> Program -> Either TypeError Type
-runTermCheck term prog = do
-    (cs, changeBackSub, _, t) <- runCheck (checkTerm term) (prog, Map.empty, 0)
-    sub <- solve cs
-
-    return $ substituteType changeBackSub $ substituteType sub t
-
 checkDefinitions :: Environment -> [Definition] -> Analysis ()
 checkDefinitions _ [] = return ()
 checkDefinitions env ((DataDef d xs cons) : ds) = do
@@ -189,37 +220,6 @@ checkVarDef :: Type -> Term -> Analysis ()
 checkVarDef type' term = do
     t <- checkTerm term
     type' `isType` t
-
-checkProgram :: [Definition] -> Either TypeError Program
-checkProgram ds =
-    if null sameName
-        then do
-            let p = buildProgram ds
-            (cs, changeBackSub, _, _) <-
-                runCheck (checkDefinitions Map.empty ds) (p, Map.empty, 0)
-            sub <- solve cs
-            Right $ buildProgram $ map (substitute changeBackSub) $ map (substitute sub) ds
-        else do
-            Left $
-                "Found top-level definitions with the same name. Multiple instances of "
-                    ++ intercalate ", " sameName
-  where
-    sameName :: [Name]
-    sameName =
-        let constructorNames = concatMap getConstructorNames ds
-            defNames = map getName ds
-            groupedNames = NonEmpty.group $ sort $ constructorNames ++ defNames
-            duplicates = catMaybes $ map longerThanOne groupedNames
-         in map NonEmpty.head duplicates
-    getName :: Definition -> Name
-    getName (VarDef x _ _) = x
-    getName (DataDef d _ _) = d
-    getConstructorNames :: Definition -> [Name]
-    getConstructorNames (VarDef _ _ _) = []
-    getConstructorNames (DataDef _ _ cs) = map (\(c, _) -> c) cs
-    longerThanOne :: NonEmpty a -> Maybe (NonEmpty a)
-    longerThanOne (_ :| []) = Nothing
-    longerThanOne l = Just l
 
 substitute :: Substitution -> Definition -> Definition
 substitute _ (d@(DataDef _ _ _)) = d
