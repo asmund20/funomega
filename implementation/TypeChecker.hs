@@ -112,9 +112,9 @@ checkProgram ds =
     getConstructorNames :: Definition -> [Name]
     getConstructorNames (VarDef _ _ _) = []
     getConstructorNames (DataDef _ _ cs) = map (\(c, _) -> c) cs
-    longerThanOne :: NonEmpty a -> Maybe (NonEmpty a)
-    longerThanOne (_ :| []) = Nothing
-    longerThanOne l = Just l
+longerThanOne :: NonEmpty a -> Maybe (NonEmpty a)
+longerThanOne (_ :| []) = Nothing
+longerThanOne l = Just l
 
 checkTerm :: Term -> Analysis Type
 checkTerm (Variable x) = do
@@ -187,8 +187,17 @@ checkTerm (Function x t) = do
 checkDefinitions :: Environment -> [Definition] -> Analysis ()
 checkDefinitions _ [] = return ()
 checkDefinitions env ((DataDef d xs cons) : ds) = do
-    forM_ cons checkCons
-    checkDefinitions env ds
+    let sorted = sort xs
+        grouped = NonEmpty.group sorted
+        dups = catMaybes $ map longerThanOne grouped
+    case dups of
+        [] -> do
+            forM_ cons checkCons
+            checkDefinitions env ds
+        l ->
+            throwError $
+                "Data def has duplicate type variables: "
+                    ++ intercalate ", " (map (NonEmpty.head) l)
   where
     checkCons :: (C, [Type]) -> Analysis ()
     checkCons (_, ts) = forM_ ts checkType
@@ -211,7 +220,6 @@ checkDefinitions env ((DataDef d xs cons) : ds) = do
         checkType t0
         checkType t1
 checkDefinitions env ((VarDef x type' term) : ds) = do
-    -- TODO: Instantiate type variables in type' and add to changeBackMapping
     let newEnv = Map.insert x type' env
     localEnv newEnv $ checkVarDef type' term
     checkDefinitions newEnv ds
